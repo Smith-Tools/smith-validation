@@ -13,6 +13,11 @@ let package = Package(
         .visionOS(.v1)
     ],
     products: [
+        // Core framework (now local target)
+        .library(
+            name: "SmithValidationCore",
+            targets: ["SmithValidationCore"]
+        ),
         // Library for architectural validation
         .library(
             name: "SmithValidation",
@@ -23,11 +28,8 @@ let package = Package(
             name: "smith-validation",
             targets: ["smith-validation"]
         ),
-
-      ],
+    ],
     dependencies: [
-        // SmithValidationCore framework for AST utilities and models
-        .package(path: "../SmithValidationCore"),
         // SwiftSyntax for parsing and analysis (updated for Swift Testing compatibility)
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
         // Swift Testing for modern testing framework
@@ -36,11 +38,20 @@ let package = Package(
         .package(url: "https://github.com/apple/pkl-swift.git", from: "0.7.1"),
     ],
     targets: [
+        // Local core framework
+        .target(
+            name: "SmithValidationCore",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
+            path: "Sources/SmithValidationCore/Sources/SmithValidationCore"
+        ),
         // Maxwells TCA rules (symlinked rule sources)
         .target(
             name: "MaxwellsTCARules",
             dependencies: [
-                .product(name: "SmithValidationCore", package: "SmithValidationCore"),
+                "SmithValidationCore",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
@@ -58,7 +69,7 @@ let package = Package(
         .target(
             name: "SmithValidation",
             dependencies: [
-                .product(name: "SmithValidationCore", package: "SmithValidationCore"),
+                "SmithValidationCore",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
@@ -72,6 +83,7 @@ let package = Package(
             name: "smith-validation",
             dependencies: [
                 "SmithValidation",
+                "SmithValidationCore",
                 "MaxwellsTCARules",
             ],
             path: "Sources/smith-validation"

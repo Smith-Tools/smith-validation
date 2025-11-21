@@ -244,6 +244,7 @@ struct smith_validation {
     }
 
     private static func runEngineMode(arguments: [String], config: SmithValidationConfig?, configPath: String) {
+        let cli = CLIOptions(arguments: arguments)
         print("=== smith-validation (engine mode) ===")
         if config != nil {
             print("⚙️  Loading config from PKL: \(configPath)")

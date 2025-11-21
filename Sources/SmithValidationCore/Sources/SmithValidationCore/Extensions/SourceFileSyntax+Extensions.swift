@@ -1,0 +1,94 @@
+// Extensions/SourceFileSyntax+Extensions.swift
+// High-level extensions for SwiftSourceFileSyntax that hide AST complexity
+
+import SwiftSyntax
+import SwiftParser
+import Foundation
+
+/// High-level extensions for SwiftSourceFileSyntax that provide semantic operations
+public extension SourceFileSyntax {
+
+    /// Find all TCA reducers in this file
+    /// - Returns: Array of StructInfo for structs conforming to Reducer or with @Reducer attribute
+    public func findTCAReducers() -> [StructInfo] {
+        var reducers: [StructInfo] = []
+
+        let visitor = TCAReducerVisitor(viewMode: .sourceAccurate)
+        visitor.walk(self)
+        reducers = visitor.reducers
+
+        return reducers
+    }
+
+    /// Find State structs within TCA reducers
+    /// - Returns: Array of StateStructInfo for State structs found in TCA reducers
+    public func findStatesInTCAReducers() -> [StructInfo] {
+        let reducers = findTCAReducers()
+        return reducers.compactMap { reducer in
+            reducer.findNestedStruct(named: "State")
+        }
+    }
+
+    /// Find Action enums within TCA reducers
+    /// - Returns: Array of EnumInfo for Action enums found in TCA reducers
+    public func findActionsInTCAReducers() -> [EnumInfo] {
+        let reducers = findTCAReducers()
+        return reducers.compactMap { reducer in
+            reducer.findNestedEnum(named: "Action")
+        }
+    }
+
+    /// Parse Swift code from a string
+    /// - Parameter source: Swift source code string
+    /// - Returns: Parsed SourceFileSyntax
+    public static func parse(source: String) throws -> SourceFileSyntax {
+        return Parser.parse(source: source)
+    }
+
+    /// Parse Swift code from a file URL
+    /// - Parameter url: URL of Swift file to parse
+    /// - Returns: Parsed SourceFileSyntax
+    public static func parse(from url: URL) throws -> SourceFileSyntax {
+        let source = try String(contentsOf: url)
+        return try parse(source: source)
+    }
+}
+
+// MARK: - Syntax Visitor for TCA Reducer Detection
+
+private class TCAReducerVisitor: SyntaxVisitor {
+    var reducers: [StructInfo] = []
+
+    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        // Check if struct has @Reducer attribute or conforms to Reducer protocol
+        let hasReducerAttribute = node.attributes.containsAttribute { attribute in
+            attribute.attributeName.description == "Reducer"
+        }
+
+        let conformsToReducer = node.inheritanceClause?.inheritedTypes.contains { element in
+            element.type.description.trimmingCharacters(in: .whitespacesAndNewlines) == "Reducer"
+        } ?? false
+
+        if hasReducerAttribute || conformsToReducer {
+            reducers.append(StructInfo(from: node))
+        }
+
+        return .skipChildren
+    }
+}
+
+// MARK: - Helper Extensions
+
+extension AttributeListSyntax {
+    /// Check if any attribute in the list satisfies the predicate
+    /// - Parameter predicate: A closure that takes an AttributeSyntax and returns Bool
+    /// - Returns: True if any attribute satisfies the predicate
+    func containsAttribute(where predicate: (AttributeSyntax) -> Bool) -> Bool {
+        return self.contains { attribute in
+            if let attr = attribute.as(AttributeSyntax.self) {
+                return predicate(attr)
+            }
+            return false
+        }
+    }
+}
