@@ -107,7 +107,7 @@ struct SmithValidationCLI {
         let process = Process()
         process.environment = env
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["swift", "test", "--package-path", packPath, "--disable-sandbox"]
+        process.arguments = ["swift", "test", "-c", "release", "--package-path", packPath, "--disable-sandbox"]
 
         let pipe = Pipe()
         process.standardOutput = pipe
