@@ -36,6 +36,12 @@ public enum FileUtils {
             }
 
             if resourceValues.isDirectory == true {
+                // If the directory itself matches an exclude glob, prune it to avoid traversing huge artifacts.
+                let dirPath = fileURL.path + "/" // ensure trailing slash for glob match
+                if matches(globs: excludeGlobs, path: dirPath) {
+                    directoryEnumerator?.skipDescendants()
+                    continue
+                }
                 // Recursively search subdirectories
                 swiftFiles.append(contentsOf: try findSwiftFiles(in: fileURL, includeGlobs: includeGlobs, excludeGlobs: excludeGlobs))
             } else if fileURL.pathExtension == "swift" {

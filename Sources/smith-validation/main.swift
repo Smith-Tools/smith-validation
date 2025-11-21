@@ -107,7 +107,9 @@ struct SmithValidationCLI {
         let process = Process()
         process.environment = env
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["swift", "test", "-c", "release", "--package-path", packPath, "--disable-sandbox"]
+        // First try to reuse an existing build to avoid costly rebuilds.
+        var args = ["swift", "test", "-c", "release", "--package-path", packPath, "--disable-sandbox", "--skip-build"]
+        process.arguments = args
 
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -132,7 +134,33 @@ struct SmithValidationCLI {
                 }
             }
 
-        if process.terminationStatus != 0 && findings.isEmpty {
+        if process.terminationStatus != 0 {
+            // If skip-build failed (likely because nothing is built), retry with a full build once.
+            if args.contains("--skip-build") {
+                let fallback = Process()
+                fallback.environment = env
+                fallback.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                fallback.arguments = ["swift", "test", "-c", "release", "--package-path", packPath, "--disable-sandbox"]
+                let fbPipe = Pipe()
+                fallback.standardOutput = fbPipe
+                fallback.standardError = fbPipe
+                do { try fallback.run() } catch { return .failure(error) }
+                fallback.waitUntilExit()
+                let fbOut = String(data: fbPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let fbFindings = fbOut
+                    .split(separator: "\n")
+                    .compactMap { line -> ArchitecturalViolation? in
+                        guard line.hasPrefix(findingMarker) else { return nil }
+                        let jsonPart = line.dropFirst(findingMarker.count)
+                        guard let data = String(jsonPart).data(using: .utf8) else { return nil }
+                        return try? JSONDecoder().decode(TestFinding.self, from: data).toViolation()
+                    }
+                if fallback.terminationStatus != 0 && fbFindings.isEmpty {
+                    let err = NSError(domain: "smith-validation.rules-tests", code: Int(fallback.terminationStatus), userInfo: [NSLocalizedDescriptionKey: fbOut])
+                    return .failure(err)
+                }
+                return .success(fbFindings)
+            }
             let err = NSError(domain: "smith-validation.rules-tests", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: output])
             return .failure(err)
         }
