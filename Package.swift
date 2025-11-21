@@ -23,6 +23,11 @@ let package = Package(
             name: "SmithValidation",
             targets: ["SmithValidation"]
         ),
+        // Maxwells TCA rules for TCA-specific validation
+        .library(
+            name: "MaxwellsTCARules",
+            targets: ["MaxwellsTCARules"]
+        ),
         // Optional CLI tool for standalone usage
         .executable(
             name: "smith-validation",
