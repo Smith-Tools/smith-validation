@@ -36,6 +36,38 @@ cd smith-validation
 swift build -c release
 ```
 
+#### Homebrew (for users)
+```bash
+brew tap Smith-Tools/smith
+brew install smith-validation
+smith-validation --engine /path/to/project
+```
+
+#### Faster local runs (keep `.build` warm)
+```bash
+cd smith-validation
+swift build -c release                      # one-time warm build
+./.build/release/smith-validation --engine /path/to/project   # reuse, no rebuild
+```
+Do not commit or ship `.build/`; it is only for local/CI caching.
+
+
+### 🚦 CLI Usage (engine mode)
+
+```
+smith-validation --engine /path/to/project
+
+Options:
+  --include pat1,pat2   Glob(s) to include (default: **/*.swift)
+  --exclude pat1,pat2   Glob(s) to exclude (default: **/DerivedData/**,**/.build/**,**/Pods/**,**/.swiftpm/**)
+  --version, -v         Print version
+```
+
+Notes:
+- Supplying a path (or `--engine`) runs the engine; otherwise legacy mode prints demo output.
+- Defaults skip common third-party/derived locations to avoid validating vendored/derived code.
+- Progress logs show include/exclude globs and file count.
+
 ### Basic Usage
 
 ```bash
