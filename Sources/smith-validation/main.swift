@@ -347,7 +347,7 @@ struct smith_validation {
     }
 
     private static func versionString() -> String {
-        return "v1.0.4"
+        return "v1.0.7"
     }
 
     /// Attempt to load PKL configuration if the file exists.
