@@ -1,368 +1,153 @@
+import Foundation
 import SmithValidation
 import SmithValidationCore
-import SwiftSyntax
-import Foundation
-// When statically linking packs, import their registrars here.
 import MaxwellsTCARules
 
-@main
-struct smith_validation {
-    static func main() {
-        let arguments = CommandLine.arguments
-        let cli = CLIOptions(arguments: arguments)
-        let configPath = cli.configPath
-        let config = loadConfig(at: configPath)
+/// Marker prefix used by rule-pack tests to emit findings.
+private let findingMarker = "SMITH_RULE_FINDING:"
+private let projectEnvKey = "SMITH_RULES_PROJECT_ROOT"
+private let includeEnvKey = "SMITH_RULES_INCLUDE"
+private let excludeEnvKey = "SMITH_RULES_EXCLUDE"
 
-        if cli.showVersion {
+@main
+struct SmithValidationCLI {
+    static func main() {
+        let opts = CLIOptions.parse(CommandLine.arguments.dropFirst())
+
+        if opts.showVersion {
             print("smith-validation \(versionString())")
             return
         }
 
-        if cli.targetDirectory != nil || arguments.contains("--engine") {
-            runEngineMode(arguments: arguments, config: config, configPath: configPath, cli: cli)
+        if let rulesPack = opts.rulesTestsPath {
+            guard let target = opts.paths.first else {
+                print("❌ Please provide a target project path as the first positional argument when using --rules-tests.")
+                exit(1)
+            }
+            switch runRulesTests(packPath: rulesPack, targetPath: target, include: opts.includeGlobs, exclude: opts.excludeGlobs) {
+            case .success(let violations):
+                generateArchitecturalReport(
+                    violationsCollections: [("Custom Rule Pack", ViolationCollection(violations: violations))],
+                    totalFiles: violations.map { _ in 0 }.count,
+                    parsedFiles: violations.map { _ in 0 }.count
+                )
+                exit(violations.isEmpty ? 0 : 2)
+            case .failure(let error):
+                print("❌ rules-tests failed: \(error.localizedDescription)")
+                exit(1)
+            }
+        }
+
+        // Engine mode is the default when a path is provided
+        if !opts.paths.isEmpty || opts.engine {
+            runEngineMode(opts: opts)
             return
         }
 
-        // Note: --engine mode has been moved to separate executable
-        // Use smith-validation-engine to test the new engine architecture
+        // Help
+        print("""
+        smith-validation \(versionString())
+        Usage:
+          smith-validation [--engine] <path>                       Run built-in engine with bundled rules
+          smith-validation --rules-tests <rule-pack> <path>        Run a Swift Testing rule pack dynamically
 
-        // Legacy mode for backward compatibility
-        print("=== smith-validation - TCA Architectural Validation ===")
-        print("Validating Complete TCA Rule Suite 1.1-1.5:\n")
-        print("  1.1: Monolithic Features (State size, Action cases)")
-        print("  1.2: Proper Dependency Injection")
-        print("  1.3: Code Duplication")
-        print("  1.4: Unclear Organization")
-        print("  1.5: Tightly Coupled State\n")
-        print("💡 Use --engine flag to try the new rule engine architecture\n")
-
-        do {
-            let sourceFiles: [SourceFileSyntax]
-
-            var sourceFileContexts: [SourceFileContext] = []
-
-            if arguments.count > 1 && arguments[1] != "--engine" {
-                // Validate provided directory
-                let directoryPath = arguments[1]
-                let directoryURL = URL(fileURLWithPath: directoryPath)
-                print("📁 Validating Swift files in: \(directoryPath)\n")
-
-                let swiftFiles = try FileUtils.findSwiftFiles(in: directoryURL)
-            let parsedFiles = swiftFiles.compactMap { (url) -> SourceFileContext? in
-                do {
-                    let syntax = try SourceFileSyntax.parse(from: url)
-                    return SourceFileContext(url: url, syntax: syntax)
-                } catch {
-                    return nil
-                    }
-                }
-                sourceFileContexts = parsedFiles
-                sourceFiles = sourceFileContexts.map { $0.syntax }
-                print("📊 Found \(swiftFiles.count) Swift files, parsed \(sourceFiles.count) successfully\n")
-            } else {
-                // Use embedded test code for demonstration
-                print("📁 No directory provided, using embedded test code\n")
-                let testCode = """
-                import ComposableArchitecture
-                import Foundation
-
-                @Reducer
-                public struct ReadingLibraryFeature {
-                public struct State: Equatable {
-                    // Navigation
-                    public var primarySelection: ArticleSidebarDestination?
-                    public var articleSelection: Article.ID?
-
-                    // Data
-                    public var articles: IdentifiedArrayOf<Article>
-                    public var categoryCounts: ArticleCategoryCounts
-
-                    // UI State - multiple unrelated concerns
-                    public var multiSelection: Set<Article.ID>
-                    public var reader: ArticleReaderFeature.State?
-                    public var tags: TagsFeature.State
-                    public var inspector: InspectorFeature.State
-                    public var importExport: ImportExportFeature.State
-                    public var smartFolders: SmartFolderFeature.State
-                    public var manualFolders: ManualFolderFeature.State
-
-                    // This should be >15 properties (violating Rule 1.1)
-                    public var search: SearchFeature.State
-                    public var filter: FilterFeature.State
-                    public var settings: SettingsFeature.State
-                    public var share: ShareFeature.State
-                    public var export: ExportFeature.State
-                    public var sync: SyncFeature.State
-                    public var debug: DebugFeature.State
-                    public var performance: PerformanceFeature.State
-                }
-
-                public enum Action: BindableAction, Equatable {
-                    // Navigation actions
-                    case selectArticle(Article.ID)
-                    case navigateTo(ArticleSidebarDestination)
-
-                    // Data actions
-                    case loadArticles
-                    case refreshArticles
-
-                    // UI actions (many unrelated concerns)
-                    case search(SearchFeature.Action)
-                    case filter(FilterFeature.Action)
-                    case tags(TagsFeature.Action)
-                    case inspector(InspectorFeature.Action)
-                    case importExport(ImportExportFeature.Action)
-                    case smartFolders(SmartFolderFeature.Action)
-                    case manualFolders(ManualFolderFeature.Action)
-                    case settings(SettingsFeature.Action)
-                    case share(ShareFeature.Action)
-                    case export(ExportFeature.Action)
-                    case sync(SyncFeature.Action)
-                    case debug(DebugFeature.Action)
-                    case performance(PerformanceFeature.Action)
-
-                    // Binding actions
-                    case set(\\BindingStateAction<State>)
-                }
-
-                    @Dependency(\\.client) var apiClient
-                    @Dependency(\\.database) var database
-                    @Dependency(\\.analytics) var analytics
-
-                    public var body: some ReducerOf<Self> {
-                        Reduce { state, action in
-                            switch action {
-                            case .selectArticle(let id):
-                                state.articleSelection = id
-                                return .none
-
-                            case .navigateTo(let destination):
-                                state.primarySelection = destination
-                                return .none
-
-                            case .loadArticles:
-                                // Anti-pattern: Direct API client usage instead of dependency injection
-                                Task {
-                                    let articles = try await apiClient.fetchArticles()
-                                    // Direct state mutation outside of Reduce scope
-                                    state.articles = IdentifiedArrayOf(uniqueElements: articles)
-                                }
-                                return .none
-
-                            case .refreshArticles:
-                                // Another anti-pattern: Direct dependency usage
-                                return .run { send in
-                                    let articles = try await database.loadArticles()
-                                    await send(.articlesResponse(articles))
-                                }
-
-                            case .search, .filter, .tags, .inspector, .importExport, .smartFolders, .manualFolders, .settings, .share, .export, .sync, .debug, .performance:
-                                // Too many unrelated child actions in one reducer
-                                return .none
-
-                            case .set:
-                                return .none
-                            }
-                        }
-                    }
-                }
-                """
-
-                let syntax = try SourceFileSyntax.parse(source: testCode)
-                let context = SourceFileContext(
-                    path: "<embedded-test-code>",
-                    url: URL(fileURLWithPath: "/test"),
-                    syntax: syntax
-                )
-                sourceFileContexts = [context]
-                sourceFiles = [syntax]
-                print("📄 Using embedded test code with complex TCA reducer\n")
-            }
-
-            print("📁 Parsed source files successfully\n")
-
-            // Since we removed the rules from smith-validation, we'll show a message
-            print("🔄 Legacy Mode: Rules have been migrated to Maxwells TCA validation")
-            print("💡 Use the new engine mode with: smith-validation --engine")
-            print("📦 Or directly test Maxwells rules from: /Volumes/Plutonian/_Developer/Maxwells/TCA/validation/\n")
-            if let config {
-                print("⚙️  Loaded PKL config: \(configPath) (\(config.bundles.count) bundle(s))\n")
-            } else {
-                print("⚙️  No PKL config found at \(configPath); continuing with built-in defaults\n")
-            }
-
-            // Create simple mock violations for demonstration
-            var allViolations: [ArchitecturalViolation] = []
-
-            // Mock violations for demonstration
-            if !sourceFileContexts.isEmpty {
-                let mockViolation1 = ArchitecturalViolation.high(
-                    rule: "TCA-1.1-MonolithicFeatures",
-                    file: sourceFileContexts[0].filename,
-                    line: 25,
-                    message: "State struct has >15 properties (found 20)",
-                    recommendation: "Consider splitting into multiple child features"
-                )
-
-                let mockViolation2 = ArchitecturalViolation.medium(
-                    rule: "TCA-1.5-TightlyCoupledState",
-                    file: sourceFileContexts[0].filename,
-                    line: 42,
-                    message: "Reducer handles too many child features (8 detected)",
-                    recommendation: "Extract child features into separate reducers with proper parent-child communication"
-                )
-
-                allViolations = [mockViolation1, mockViolation2]
-            }
-
-            let violationCollection = ViolationCollection(violations: allViolations)
-
-            print("📊 Rule 1.1: Monolithic Features")
-            print("Violations: \(violationCollection.filtered(by: .high).count) | Critical: \(violationCollection.filtered(by: .critical).count) | High: \(violationCollection.filtered(by: .high).count)")
-            print("   ✅ Validation complete")
-
-            print("\n📊 Rule 1.2: Proper Dependency Injection")
-            print("Violations: 0 | Critical: 0 | High: 0)")
-            print("   ✅ No violations detected")
-
-            print("\n📊 Rule 1.3: Code Duplication Results:")
-            print("Violations: 0 (Critical: 0, High: 0)")
-
-            print("\n📊 Rule 1.4: Unclear Organization Results:")
-            print("Violations: 0 (Critical: 0, High: 0)")
-
-            print("\n📊 Rule 1.5: Tightly Coupled State Results:")
-            print("Violations: 0 (Critical: 0, High: 0)")
-
-            generateArchitecturalReport(
-                violationsCollections: [
-                    ("1.1 Monolithic Features", violationCollection)
-                ],
-                totalFiles: sourceFileContexts.count,
-                parsedFiles: sourceFiles.count
-            )
-
-        } catch {
-            print("❌ smith-validation failed: \(error.localizedDescription)")
-            exit(1)
-        }
+        Options:
+          --include globs       Comma-separated include globs (default: **/*.swift)
+          --exclude globs       Comma-separated exclude globs (default: **/DerivedData/**,**/.build/**,**/Pods/**,**/.swiftpm/**)
+          --version, -v         Print version
+        """)
     }
 
-    private static func runEngineMode(arguments: [String], config: SmithValidationConfig?, configPath: String, cli: CLIOptions) {
-        print("=== smith-validation (engine mode) ===")
-        if config != nil {
-            print("⚙️  Loading config from PKL: \(configPath)")
-        }
-
-        // 1) start with statically linked packs (if imported)
-        var rules: [any ValidatableRule] = []
-        rules.append(contentsOf: registerMaxwellsRules())
-
-        // 2) optionally load dynamic bundles if PKL provides paths
-        if let config {
-            let searchPaths = config.bundles
-                .filter { $0.enabled ?? true }
-                .map { URL(fileURLWithPath: $0.path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path }
-
-            if !searchPaths.isEmpty {
-                let loader = RuleLoader(configuration: .init(searchPaths: searchPaths))
-                if let bundleRules = try? loader.loadBundles() {
-                    rules.append(contentsOf: bundleRules)
-                }
-            }
-        }
-
-        guard !rules.isEmpty else {
-            print("⚠️  No rules loaded. Link a rule pack and/or provide bundle paths in PKL.")
-            return
-        }
-
+    // MARK: - Engine mode
+    private static func runEngineMode(opts: CLIOptions) {
         do {
+            print("=== smith-validation (engine mode) ===")
+            let rules = registerMaxwellsRules()
             print("✅ Engine running \(rules.count) rule(s)")
 
-            // Target directory to validate (argument after --engine, or current dir)
-            let targetDirectory: String = cli.targetDirectory ?? FileManager.default.currentDirectoryPath
-
-            print("🔎 Collecting Swift files (include: \(cli.includeGlobs.joined(separator: ",")) | exclude: \(cli.excludeGlobs.joined(separator: ",")))")
-            let swiftFiles = try FileUtils.findSwiftFiles(
-                in: URL(fileURLWithPath: targetDirectory),
-                includeGlobs: cli.includeGlobs,
-                excludeGlobs: cli.excludeGlobs
-            )
-            let totalFiles = swiftFiles.count
-            print("📊 Found \(totalFiles) Swift files to scan")
+            var allViolations: [ArchitecturalViolation] = []
+            var totalFiles = 0
 
             let engine = ValidationEngine()
-            let violations = try engine.validate(rules: rules, directory: targetDirectory, recursive: true)
+            for path in opts.paths {
+                let urls = try FileUtils.findSwiftFiles(
+                    in: URL(fileURLWithPath: path),
+                    includeGlobs: opts.includeGlobs,
+                    excludeGlobs: opts.excludeGlobs
+                )
+                let filePaths = urls.map { $0.path }
+                let violations = try engine.validate(rules: rules, filePaths: filePaths)
+                allViolations.append(contentsOf: violations.violations)
+                totalFiles += filePaths.count
+            }
 
-            let report = ValidationReporter.generateReport(
-                for: [("Maxwells TCA Pack", violations)],
+            let collection = ViolationCollection(violations: allViolations)
+            generateArchitecturalReport(
+                violationsCollections: [("Maxwells TCA Pack", collection)],
                 totalFiles: totalFiles,
                 parsedFiles: totalFiles
             )
-            print(report)
         } catch {
             print("❌ Engine mode failed: \(error.localizedDescription)")
         }
     }
 
-    // MARK: - CLI Options
-    private struct CLIOptions {
-        let targetDirectory: String?
-        let configPath: String
-        let includeGlobs: [String]
-        let excludeGlobs: [String]
-        let showVersion: Bool
+    // MARK: - Rules test runner
+    private static func runRulesTests(
+        packPath: String,
+        targetPath: String,
+        include: [String],
+        exclude: [String]
+    ) -> Result<[ArchitecturalViolation], Error> {
+        var env = ProcessInfo.processInfo.environment
+        env[projectEnvKey] = URL(fileURLWithPath: targetPath).path
+        env[includeEnvKey] = include.joined(separator: ",")
+        env[excludeEnvKey] = exclude.joined(separator: ",")
 
-        init(arguments: [String]) {
-            var dir: String? = nil
-            var include: [String] = ["**/*.swift"]
-            var exclude: [String] = ["**/DerivedData/**", "**/.build/**", "**/Pods/**", "**/.swiftpm/**"]
-            var versionFlag = false
+        let process = Process()
+        process.environment = env
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["swift", "test", "--package-path", packPath, "--disable-sandbox"]
 
-            var args = arguments.dropFirst()
-            while let arg = args.first {
-                args = args.dropFirst()
-                switch arg {
-                case "--engine", "-e", "--path":
-                    if let next = args.first { dir = next; args = args.dropFirst() }
-                case "--include":
-                    if let next = args.first { include = next.split(separator: ",").map(String.init); args = args.dropFirst() }
-                case "--exclude":
-                    if let next = args.first { exclude = next.split(separator: ",").map(String.init); args = args.dropFirst() }
-                case "--version", "-v":
-                    versionFlag = true
-                default:
-                    if dir == nil && arg.contains("/") {
-                        dir = arg
-                    }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do { try process.run() } catch { return .failure(error) }
+        process.waitUntilExit()
+
+        let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: outputData, encoding: .utf8) ?? ""
+        let findings = output
+            .split(separator: "\n")
+            .compactMap { line -> ArchitecturalViolation? in
+                guard line.hasPrefix(findingMarker) else { return nil }
+                let jsonPart = line.dropFirst(findingMarker.count)
+                guard let data = String(jsonPart).data(using: .utf8) else { return nil }
+                do {
+                    let finding = try JSONDecoder().decode(TestFinding.self, from: data)
+                    return finding.toViolation()
+                } catch {
+                    return nil
                 }
             }
-            targetDirectory = dir
-            includeGlobs = include
-            excludeGlobs = exclude
-            showVersion = versionFlag
-            configPath = ProcessInfo.processInfo.environment["SMITH_VALIDATION_CONFIG"] ?? ""
+
+        if process.terminationStatus != 0 && findings.isEmpty {
+            let err = NSError(domain: "smith-validation.rules-tests", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: output])
+            return .failure(err)
         }
+        return .success(findings)
     }
 
-    private static func versionString() -> String {
-        return "v1.0.8"
-    }
+    // MARK: - Helpers
 
-    /// Attempt to load PKL configuration if the file exists.
+    private static func versionString() -> String { "v1.0.9" }
+
     private static func loadConfig(at path: String) -> SmithValidationConfig? {
         guard !path.isEmpty else { return nil }
         let fsPath = URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path
         guard FileManager.default.fileExists(atPath: fsPath) else { return nil }
-
-        do {
-            let loader = ConfigLoader()
-            return try loader.load(at: fsPath)
-        } catch {
-            print("⚠️  Unable to load PKL config at \(fsPath): \(error.localizedDescription)")
-            return nil
-        }
+        do { return try ConfigLoader().load(at: fsPath) } catch { return nil }
     }
 
     private static func generateArchitecturalReport(
@@ -391,30 +176,79 @@ struct smith_validation {
 
         if !totalViolations.isEmpty {
             print("\n📋 VIOLATION BREAKDOWN:")
-
-            for (index, collection) in violationsCollections.enumerated() {
-                if collection.violations.count > 0 {
-                    let ruleNumber = index + 1
-                    let ruleName = collection.rule
-                    print("\n\(ruleNumber). \(ruleName)")
-                    print("─" + String(repeating: "─", count: ruleName.count))
-
-                    for violation in collection.violations.violations {
-                        print("   • \(violation.file):\(violation.line)")
-                        print("     \(violation.message)")
-                        if let rec = violation.recommendation {
-                            print("     💡 \(rec)")
-                        }
-                    }
+            for (index, collection) in violationsCollections.enumerated() where collection.violations.count > 0 {
+                let ruleNumber = index + 1
+                let ruleName = collection.rule
+                print("\n\(ruleNumber). \(ruleName)")
+                print("─" + String(repeating: "─", count: ruleName.count))
+                for violation in collection.violations.violations {
+                    print("   • \(violation.file):\(violation.line)")
+                    print("     \(violation.message)")
+                    if let rec = violation.recommendation { print("     💡 \(rec)") }
                 }
             }
         }
 
         print("""
         ────────────────────────────────────────────────────────────────────────────────
-        🤖 Generated by smith-validation - TCA Architectural Pattern Detection
-        📖 Framework: The Composable Architecture (TCA)
-        🎯 Rules: Monolithic Features, Dependencies, Duplication, Organization, Coupling
+        🤖 Generated by smith-validation
         """)
+    }
+}
+
+// MARK: - CLI options
+fileprivate struct CLIOptions {
+    var paths: [String] = []
+    var engine: Bool = false
+    var rulesTestsPath: String?
+    var includeGlobs: [String] = ["**/*.swift"]
+    var excludeGlobs: [String] = ["**/DerivedData/**", "**/.build/**", "**/Pods/**", "**/.swiftpm/**"]
+    var showVersion: Bool = false
+    var configPath: String = ProcessInfo.processInfo.environment["SMITH_VALIDATION_CONFIG"] ?? ""
+
+    static func parse(_ args: ArraySlice<String>) -> CLIOptions {
+        var opts = CLIOptions()
+        var it = args.makeIterator()
+        while let arg = it.next() {
+            switch arg {
+            case "--engine", "-e":
+                opts.engine = true
+            case "--include":
+                if let next = it.next() { opts.includeGlobs = next.split(separator: ",").map(String.init) }
+            case "--exclude":
+                if let next = it.next() { opts.excludeGlobs = next.split(separator: ",").map(String.init) }
+            case "--rules-tests":
+                if let next = it.next() { opts.rulesTestsPath = next }
+            case "--version", "-v":
+                opts.showVersion = true
+            default:
+                if !arg.hasPrefix("-") {
+                    opts.paths.append(arg)
+                }
+            }
+        }
+        return opts
+    }
+}
+
+// MARK: - Test finding model
+private struct TestFinding: Codable {
+    let rule: String
+    let severity: String
+    let file: String
+    let line: Int
+    let message: String
+    let recommendation: String?
+
+    func toViolation() -> ArchitecturalViolation {
+        let sev = severity.lowercased()
+        switch sev {
+        case "critical": return .critical(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
+        case "high": return .high(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
+        case "medium": return .medium(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
+        case "low": fallthrough
+        default:
+            return .low(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
+        }
     }
 }

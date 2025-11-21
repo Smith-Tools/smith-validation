@@ -71,6 +71,16 @@ Notes:
 - Defaults skip common third-party/derived locations to avoid validating vendored/derived code.
 - Progress logs show include/exclude globs and file count.
 
+### 🧪 Run Swift Testing rule packs (dynamic)
+
+```
+smith-validation --rules-tests /path/to/rule-pack /path/to/project
+```
+
+- The rule pack is a SwiftPM package with tests that emit findings via `RuleTestEmitter.emit(...)`.
+- smith-validation sets `SMITH_RULES_PROJECT_ROOT`, `SMITH_RULES_INCLUDE`, `SMITH_RULES_EXCLUDE` for the test process.
+- Useful when teams maintain custom rules without rebuilding the CLI.
+
 ### Basic Usage
 
 ```bash
