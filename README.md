@@ -1,24 +1,23 @@
 # smith-validation
 
-> **TCA** architectural validation engine for Swift projects
+> **Swift architectural validation engine**
 
 [![Release](https://img.shields.io/github/release/Smith-Tools/smith-validation.svg)](https://github.com/Smith-Tools/smith-validation/releases)
 [![Swift](https://img.shields.io/badge/swift-5.9%2B-orange.svg)](https://swift.org)
-[![TCA](https://img.shields.io/badge/TCA-Compatible-blue.svg)](https://github.com/pointfreeco/swift-composable-architecture)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-smith-validation is a **specialized validation engine** that enforces architectural best practices for projects using **The Composable Architecture (TCA)**. It analyzes your Swift/TCA code, detects anti-patterns, and provides actionable recommendations to improve code quality and maintainability.
+smith-validation is a **pluggable architectural validation engine** for Swift projects. It uses SwiftSyntax to analyze your code structure, detect architectural violations, and enforce best practices through configurable rule packs.
 
-> **Note**: This tool is specifically designed for TCA projects and validates against Maxwells TCA architectural rules.
+> **Note**: Comes with Maxwells TCA rules for The Composable Architecture, but can validate any Swift architectural patterns.
 
 ## ✨ Features
 
-- **5 TCA-Specific Rules**: Based on Maxwells TCA architectural patterns
-- **AST-Based Analysis**: Deep understanding of your TCA code structure using SwiftSyntax
-- **Actionable Recommendations**: Not just problems, but specific TCA solutions
-- **Fast Performance**: Optimized for large TCA codebases (validated on 850+ TCA files)
-- **Engine Mode**: Advanced validation with dynamic rule loading
-- **PKL Configuration**: Customizable rule behavior and thresholds
+- **Pluggable Architecture**: Add custom rule packs for any architectural pattern
+- **SwiftSyntax-Based**: Deep AST analysis of your Swift code
+- **Dynamic Rule Loading**: Load rules from compiled bundles or source code
+- **PKL Configuration**: Flexible configuration management
+- **Dual Interface**: Both CLI tool and framework integration
+- **Performance Optimized**: Efficient parsing and caching
 
 ## 🚀 Quick Start
 
@@ -40,177 +39,75 @@ swift build -c release
 ### Basic Usage
 
 ```bash
-# Validate TCA project (engine mode - recommended)
-smith-validation --engine /path/to/tca/project
+# Validate current directory (engine mode - recommended)
+smith-validation --engine .
 
-# Legacy demo mode (embedded test code)
-smith-validation
+# Validate specific project
+smith-validation --engine /path/to/swift/project
 
 # Run with configuration file
 smith-validation --engine . --config config.pkl
+
+# Legacy demo mode (with embedded test code)
+smith-validation
 ```
 
-## 📋 TCA Validation Rules
+## 📋 Built-in Rule Packs
 
-### Rule 1.1: Monolithic Features
-Detects overly complex TCA State structs and Action enums that violate single responsibility principle.
+### Maxwells TCA Rules (Included)
 
-**TCA Thresholds:**
-- State structs with >15 properties
-- Action enums with >40 cases
+The engine comes with a TCA-specific rule pack that validates The Composable Architecture patterns:
 
-**TCA Violation Example:**
-```swift
-@Reducer
-struct ReadingLibraryFeature {
-    public struct State: Equatable {
-        // Navigation
-        public var primarySelection: ArticleSidebarDestination?
-        public var articleSelection: Article.ID?
+#### Rule 1.1: Monolithic Features
+Detects overly complex State structs and Action enums.
 
-        // Data
-        public var articles: IdentifiedArrayOf<Article>
-        public var categoryCounts: ArticleCategoryCounts
-
-        // UI State - multiple unrelated concerns
-        public var multiSelection: Set<Article.ID>
-        public var reader: ArticleReaderFeature.State?
-        public var tags: TagsFeature.State
-        public var inspector: InspectorFeature.State
-        public var importExport: ImportExportFeature.State
-        public var smartFolders: SmartFolderFeature.State
-        public var manualFolders: ManualFolderFeature.State
-        public var search: SearchFeature.State
-        public var filter: FilterFeature.State
-        public var settings: SettingsFeature.State
-        public var share: ShareFeature.State
-        public var export: ExportFeature.State
-        public var sync: SyncFeature.State
-        public var debug: DebugFeature.State
-        public var performance: PerformanceFeature.State
-
-        // This should be >15 properties (violating Rule 1.1)
-    }
-}
-```
-
-**TCA Recommendation:**
-```swift
-@Reducer
-struct ReadingLibraryFeature {
-    public struct State: Equatable {
-        // Core navigation and data
-        public var primarySelection: ArticleSidebarDestination?
-        public var articleSelection: Article.ID?
-        public var articles: IdentifiedArrayOf<Article>
-
-        // Extract child features
-        @Presents var search: SearchFeature.State?
-        @Presents var tags: TagsFeature.State?
-        @Presents var reader: ArticleReaderFeature.State?
-    }
-}
-```
-
-### Rule 1.2: Proper Dependency Injection
-Ensures TCA dependencies use the `@Dependency` system instead of direct instantiation.
-
-**TCA Violation:**
+**Example Violation:**
 ```swift
 @Reducer
 struct Feature {
-    @Dependency(\.apiClient) var apiClient
-
-    var body: some ReducerOf<Self> {
-        Reduce { state, action in
-            switch action {
-            case .loadArticles:
-                // Anti-pattern: Direct client usage instead of proper dependency injection
-                Task {
-                    let articles = try await apiClient.fetchArticles()
-                    // Direct state mutation outside of Reduce scope
-                    state.articles = IdentifiedArrayOf(uniqueElements: articles)
-                }
-                return .none
-            }
-        }
-    }
-}
-```
-
-**TCA Recommendation:**
-```swift
-@Reducer
-struct Feature {
-    @Dependency(\.apiClient) var apiClient
-    @Dependency(\.database) var database
-
-    var body: some ReducerOf<Self> {
-        Reduce { state, action in
-            switch action {
-            case .loadArticles:
-                return .run { send in
-                    let articles = try await apiClient.fetchArticles()
-                    await send(.articlesResponse(articles))
-                }
-            }
-        }
-    }
-}
-```
-
-### Rule 1.3: Code Duplication
-Identifies duplicated TCA code patterns that should be extracted into shared components.
-
-### Rule 1.4: Unclear Organization
-Detects vague naming conventions and poor TCA code organization that reduce maintainability.
-
-### Rule 1.5: Tightly Coupled State
-Finds TCA State structs that manage too many unrelated child features or mix different domains.
-
-**TCA Violation:**
-```swift
-@Reducer
-struct ComplexFeature {
     struct State: Equatable {
-        // Too many unrelated child features (violates Rule 1.5)
-        var search: SearchFeature.State
-        var filter: FilterFeature.State
-        var tags: TagsFeature.State
-        var inspector: InspectorFeature.State
-        var importExport: ImportExportFeature.State
-        var smartFolders: SmartFolderFeature.State
-        var manualFolders: ManualFolderFeature.State
-        var settings: SettingsFeature.State
-        var share: ShareFeature.State
-    }
-
-    enum Action: BindableAction, Equatable {
-        case search(SearchFeature.Action)
-        case filter(FilterFeature.Action)
-        case tags(TagsFeature.Action)
-        case inspector(InspectorFeature.Action)
-        case importExport(ImportExportFeature.Action)
-        case smartFolders(SmartFolderFeature.Action)
-        case manualFolders(ManualFolderFeature.Action)
-        case settings(SettingsFeature.Action)
-        case share(ShareFeature.Action)
-        case set(\\BindingStateAction<State>)
+        var navigation: NavigationState
+        var userData: UserData
+        var search: SearchState
+        var filter: FilterState
+        var settings: SettingsState
+        var loading: LoadingState
+        var error: ErrorState
+        var analytics: AnalyticsState
+        var cache: CacheState
+        var sync: SyncState
+        var export: ExportState
+        var import: ImportState
+        var sharing: SharingState
+        var offline: OfflineState
+        var performance: PerformanceState
+        var debug: DebugState  // 16+ properties
     }
 }
 ```
+
+#### Rule 1.2: Proper Dependency Injection
+Ensures dependencies use the `@Dependency` system.
+
+#### Rule 1.3: Code Duplication
+Identifies duplicated code patterns.
+
+#### Rule 1.4: Unclear Organization
+Detects vague naming and poor organization.
+
+#### Rule 1.5: Tightly Coupled State
+Finds State structs managing too many unrelated features.
 
 ## 📊 Output Example
 
 ```bash
-$ smith-validation --engine ./MyTCAProject
+$ smith-validation --engine ./MyProject
 
 === smith-validation (engine mode) ===
-⚙️  Loading config from PKL: config.pkl
 ✅ Engine running 5 rule(s)
 
-🔍 smith-validation - TCA Architectural Validation
-📁 Validating Swift files in: ./MyTCAProject
+🔍 smith-validation - Architectural Validation
+📁 Validating Swift files in: ./MyProject
 
 📊 Found 850 Swift files, parsed 842 successfully
 
@@ -233,90 +130,134 @@ TCA Pack (Rules 1.1–1.5)
      TCA-1.1-MonolithicFeatures: State struct has >15 properties (found 18)
      💡 Consider splitting into multiple child features
 
-   • SearchFeature.swift:42
-     TCA-1.5-TightlyCoupledState: Reducer handles too many child features (8 detected)
-     💡 Extract child features into separate reducers with proper parent-child communication
-
    • NetworkManager.swift:15
      TCA-1.2-ClosureInjection: Direct client instantiation detected
      💡 Use @Dependency(\.apiClient) instead
 
 ───────────────────────────────────────────────────────────────────────────────
-🤖 Generated by smith-validation - TCA Architectural Pattern Detection
-📖 Framework: The Composable Architecture (TCA)
-🎯 Rules: Monolithic Features, Dependencies, Duplication, Organization, Coupling
+🤖 Generated by smith-validation - Architectural Pattern Detection
 ```
 
 ## ⚙️ Configuration
 
 ### PKL Configuration
 
-Create a `config.pkl` file to customize TCA validation behavior:
+Create a `config.pkl` file to configure rule packs:
 
 ```pkl
 smithValidation {
   bundles {
-    maxwellsTCARules {
+    tcaRules {
       enabled = true
       path = "./maxwells-tca-rules"
     }
+
+    customRules {
+      enabled = true
+      path = "./my-custom-rules"
+    }
   }
 
-  thresholds {
-    maxStateProperties = 12  // Stricter than default
-    maxActionCases = 30
-    maxChildFeatures = 4
+  settings {
+    enableCaching = true
+    parallelExecution = false
+    maxConcurrentValidations = 4
   }
 }
 ```
 
-### Programmatic Configuration
+### Rule Pack Structure
+
+A rule pack is a SwiftPM package that exports validation rules:
 
 ```swift
-import SmithValidation
-import MaxwellsTCARules
+// MyCustomRules.swift
+import SmithValidationCore
 
-let engine = ValidationEngine()
-let violations = try engine.validate(
-    rules: registerMaxwellsRules(),
-    directory: "/path/to/tca/project",
-    recursive: true
-)
+struct CustomRule1: ValidatableRule {
+    func validate(context: SourceFileContext) -> ViolationCollection {
+        // Your validation logic here
+        return ViolationCollection(violations: [])
+    }
+}
+
+// Registrar.swift
+import Foundation
+import SmithValidationCore
+
+@_cdecl("smith_register_rules")
+public func smith_register_rules() -> UnsafeMutableRawPointer {
+    let rules: [Any] = [CustomRule1(), CustomRule2()]
+    return Unmanaged.passRetained(rules as NSArray).toOpaque()
+}
 ```
 
-## 🔧 TCA Integration
+## 🏗️ Architecture
 
-### CI/CD Integration
-
-#### GitHub Actions
-```yaml
-name: TCA Validation
-on: [push, pull_request]
-
-jobs:
-  validate-tca:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install smith-validation
-        run: brew tap Smith-Tools/smith && brew install smith-validation
-      - name: Validate TCA Architecture
-        run: smith-validation --engine .
+```
+smith-validation (CLI)
+├── SmithValidationCore (Framework)
+│   ├── SwiftSyntax AST parsing
+│   ├── Violation reporting models
+│   ├── Configuration management
+│   └── Performance optimization
+├── MaxwellsTCARules (Sample Rule Pack)
+│   └── TCA-specific validation rules
+├── ValidationEngine (Rule execution)
+├── RuleLoader (Dynamic rule discovery)
+└── PKL Configuration (Flexible config)
 ```
 
-#### Pre-commit Hook
-```bash
-#!/bin/sh
-# .git/hooks/pre-commit
+## 🔧 Creating Custom Rules
 
-echo "🔍 Running TCA validation..."
-smith-validation --engine .
+### Basic Rule
 
-if [ $? -ne 0 ]; then
-    echo "❌ TCA validation failed. Please fix violations before committing."
-    exit 1
-fi
+```swift
+import SmithValidationCore
+import SwiftSyntax
+
+struct MyCustomRule: ValidatableRule {
+    func validate(context: SourceFileContext) -> ViolationCollection {
+        var violations: [ArchitecturalViolation] = []
+
+        // Walk the AST to find violations
+        let visitor = MyRuleVisitor { violation in
+            violations.append(violation)
+        }
+        visitor.walk(context.syntax)
+
+        return ViolationCollection(violations: violations)
+    }
+}
 ```
+
+### AST Visitor
+
+```swift
+class MyRuleVisitor: SyntaxVisitor {
+    private let onViolation: (ArchitecturalViolation) -> Void
+
+    init(onViolation: @escaping (ArchitecturalViolation) -> Void) {
+        self.onViolation = onViolation
+    }
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        // Check function declarations for violations
+        if isTooComplex(node) {
+            onViolation(.high(
+                rule: "CustomRule-ComplexFunction",
+                file: node.location.file,
+                line: node.location.line,
+                message: "Function is too complex",
+                recommendation: "Split into smaller functions"
+            ))
+        }
+        return .skipChildren
+    }
+}
+```
+
+## 🔧 Integration
 
 ### Swift Package Integration
 
@@ -329,43 +270,42 @@ dependencies: [
 
 ```swift
 import SmithValidation
-import MaxwellsTCARules
 
-// Run TCA validation programmatically
 let engine = ValidationEngine()
-let violations = try engine.validate(rules: registerMaxwellsRules(), directory: ".")
+let violations = try engine.validate(
+    rules: [MyCustomRule(), AnotherRule()],
+    directory: "."
+)
+```
+
+### CI/CD Integration
+
+#### GitHub Actions
+```yaml
+name: Architecture Validation
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install smith-validation
+        run: brew tap Smith-Tools/smith && brew install smith-validation
+      - name: Validate Architecture
+        run: smith-validation --engine .
 ```
 
 ## 📈 Performance
 
-smith-validation is optimized for TCA projects:
+smith-validation is optimized for large codebases:
 
-| TCA Project Size | Files | Validation Time | Memory Usage |
-|------------------|-------|-----------------|--------------|
-| Small            | <50   | <2 seconds      | ~50MB        |
-| Medium           | 50-200| <10 seconds     | ~100MB       |
-| Large            | 200+  | <60 seconds     | ~200MB       |
-| Scroll Project   | 842   | ~90 seconds     | ~180MB       |
-
-*Validated on real TCA project with 850+ TCA files*
-
-## 🏗️ TCA Architecture
-
-```
-smith-validation (CLI)
-├── SmithValidationCore (Framework)
-│   ├── AST parsing for TCA syntax
-│   ├── TCA violation reporting
-│   └── Configuration management
-├── MaxwellsTCARules (TCA-specific validation rules)
-│   ├── Rule 1.1: Monolithic Features
-│   ├── Rule 1.2: Dependency Injection
-│   ├── Rule 1.3: Code Duplication
-│   ├── Rule 1.4: Unclear Organization
-│   └── Rule 1.5: Tightly Coupled State
-├── ValidationEngine (Rule loading & execution)
-└── PKL Configuration (Dynamic TCA rule discovery)
-```
+| Project Size | Files | Validation Time | Memory Usage |
+|-------------|-------|-----------------|--------------|
+| Small       | <50   | <2 seconds      | ~50MB        |
+| Medium      | 50-200| <10 seconds     | ~100MB       |
+| Large       | 200+  | <60 seconds     | ~200MB       |
+| Very Large  | 842   | ~90 seconds     | ~180MB       |
 
 ## 🧪 Development
 
@@ -383,18 +323,13 @@ swift build -c release
 swift test
 ```
 
-### Adding Custom TCA Rules
+### Creating Rule Packs
 
-```swift
-import SmithValidationCore
-
-struct CustomTCARule: ValidatableRule {
-    func validate(context: SourceFileContext) -> ViolationCollection {
-        // Your TCA-specific validation logic here
-        return ViolationCollection(violations: [])
-    }
-}
-```
+1. Create a new SwiftPM package
+2. Add SmithValidationCore as a dependency
+3. Implement rules conforming to `ValidatableRule`
+4. Export rules via `smith_register_rules` function
+5. Configure in PKL to load your pack
 
 ## 📄 License
 
@@ -405,9 +340,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - [GitHub Repository](https://github.com/Smith-Tools/smith-validation)
 - [Issues and Support](https://github.com/Smith-Tools/smith-validation/issues)
 - [Smith Tools Organization](https://github.com/Smith-Tools)
-- [The Composable Architecture](https://github.com/pointfreeco/swift-composable-architecture)
 - [Homebrew Tap](https://github.com/Smith-Tools/homebrew-smith)
 
 ---
 
-**smith-validation** - TCA architectural validation built with ❤️ by the Smith Tools team
+**smith-validation** - Pluggable architectural validation for Swift, built with ❤️ by the Smith Tools team
