@@ -13,8 +13,13 @@ struct smith_validation {
         let configPath = cli.configPath
         let config = loadConfig(at: configPath)
 
-        if arguments.contains("--engine") {
-            runEngineMode(arguments: arguments, config: config, configPath: configPath)
+        if cli.showVersion {
+            print("smith-validation \(versionString())")
+            return
+        }
+
+        if cli.targetDirectory != nil || arguments.contains("--engine") {
+            runEngineMode(arguments: arguments, config: config, configPath: configPath, cli: cli)
             return
         }
 
@@ -243,8 +248,7 @@ struct smith_validation {
         }
     }
 
-    private static func runEngineMode(arguments: [String], config: SmithValidationConfig?, configPath: String) {
-        let cli = CLIOptions(arguments: arguments)
+    private static func runEngineMode(arguments: [String], config: SmithValidationConfig?, configPath: String, cli: CLIOptions) {
         print("=== smith-validation (engine mode) ===")
         if config != nil {
             print("⚙️  Loading config from PKL: \(configPath)")
@@ -279,14 +283,20 @@ struct smith_validation {
             // Target directory to validate (argument after --engine, or current dir)
             let targetDirectory: String = cli.targetDirectory ?? FileManager.default.currentDirectoryPath
 
-            let swiftFiles = try FileUtils.findSwiftFiles(in: URL(fileURLWithPath: targetDirectory))
+            print("🔎 Collecting Swift files (include: \(cli.includeGlobs.joined(separator: ",")) | exclude: \(cli.excludeGlobs.joined(separator: ",")))")
+            let swiftFiles = try FileUtils.findSwiftFiles(
+                in: URL(fileURLWithPath: targetDirectory),
+                includeGlobs: cli.includeGlobs,
+                excludeGlobs: cli.excludeGlobs
+            )
             let totalFiles = swiftFiles.count
+            print("📊 Found \(totalFiles) Swift files to scan")
 
             let engine = ValidationEngine()
             let violations = try engine.validate(rules: rules, directory: targetDirectory, recursive: true)
 
             let report = ValidationReporter.generateReport(
-                for: [("TCA Pack (Rules 1.1–1.5)", violations)],
+                for: [("Maxwells TCA Pack", violations)],
                 totalFiles: totalFiles,
                 parsedFiles: totalFiles
             )
@@ -300,15 +310,44 @@ struct smith_validation {
     private struct CLIOptions {
         let targetDirectory: String?
         let configPath: String
+        let includeGlobs: [String]
+        let excludeGlobs: [String]
+        let showVersion: Bool
+
         init(arguments: [String]) {
-            // Simple parse: --engine <path> and optional env override for config
-            if let engineIndex = arguments.firstIndex(of: "--engine"), engineIndex + 1 < arguments.count {
-                targetDirectory = arguments[engineIndex + 1]
-            } else {
-                targetDirectory = nil
+            var dir: String? = nil
+            var include: [String] = ["**/*.swift"]
+            var exclude: [String] = ["**/DerivedData/**", "**/.build/**", "**/Pods/**", "**/.swiftpm/**"]
+            var versionFlag = false
+
+            var args = arguments.dropFirst()
+            while let arg = args.first {
+                args = args.dropFirst()
+                switch arg {
+                case "--engine", "-e", "--path":
+                    if let next = args.first { dir = next; args = args.dropFirst() }
+                case "--include":
+                    if let next = args.first { include = next.split(separator: ",").map(String.init); args = args.dropFirst() }
+                case "--exclude":
+                    if let next = args.first { exclude = next.split(separator: ",").map(String.init); args = args.dropFirst() }
+                case "--version", "-v":
+                    versionFlag = true
+                default:
+                    if dir == nil && arg.contains("/") {
+                        dir = arg
+                    }
+                }
             }
+            targetDirectory = dir
+            includeGlobs = include
+            excludeGlobs = exclude
+            showVersion = versionFlag
             configPath = ProcessInfo.processInfo.environment["SMITH_VALIDATION_CONFIG"] ?? ""
         }
+    }
+
+    private static func versionString() -> String {
+        return "v1.0.1"
     }
 
     /// Attempt to load PKL configuration if the file exists.

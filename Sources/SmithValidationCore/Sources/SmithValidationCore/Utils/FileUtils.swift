@@ -11,7 +11,11 @@ public enum FileUtils {
     /// - Parameter directory: Directory URL to search
     /// - Returns: Array of Swift file URLs
     /// - Throws: File system errors
-    public static func findSwiftFiles(in directory: URL) throws -> [URL] {
+    public static func findSwiftFiles(
+        in directory: URL,
+        includeGlobs: [String] = ["**/*.swift"],
+        excludeGlobs: [String] = []
+    ) throws -> [URL] {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: directory.path) else {
             throw ValidationError.directoryNotFound(directory)
@@ -33,13 +37,51 @@ public enum FileUtils {
 
             if resourceValues.isDirectory == true {
                 // Recursively search subdirectories
-                swiftFiles.append(contentsOf: try findSwiftFiles(in: fileURL))
+                swiftFiles.append(contentsOf: try findSwiftFiles(in: fileURL, includeGlobs: includeGlobs, excludeGlobs: excludeGlobs))
             } else if fileURL.pathExtension == "swift" {
-                swiftFiles.append(fileURL)
+                let path = fileURL.path
+                if matches(globs: includeGlobs, path: path) && !matches(globs: excludeGlobs, path: path) {
+                    swiftFiles.append(fileURL)
+                }
             }
         }
 
         return swiftFiles
+    }
+
+    private static func matches(globs: [String], path: String) -> Bool {
+        guard !globs.isEmpty else { return true }
+        return globs.contains { glob in
+            path.range(of: globToRegex(glob), options: .regularExpression) != nil
+        }
+    }
+
+    private static func globToRegex(_ glob: String) -> String {
+        // Very simple glob->regex for ** and *
+        var regex = "^"
+        var i = glob.startIndex
+        while i < glob.endIndex {
+            let ch = glob[i]
+            if ch == "*" {
+                let next = glob.index(after: i)
+                if next < glob.endIndex && glob[next] == "*" {
+                    regex.append(".*")
+                    i = glob.index(after: next)
+                    continue
+                } else {
+                    regex.append("[^/]*")
+                }
+            } else if ch == "." {
+                regex.append("\\.")
+            } else if ch == "/" {
+                regex.append("/")
+            } else {
+                regex.append(ch)
+            }
+            i = glob.index(after: i)
+        }
+        regex.append("$")
+        return regex
     }
 }
 
