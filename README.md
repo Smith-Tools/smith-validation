@@ -23,11 +23,14 @@ smith-validation is a **pluggable architectural validation engine** for Swift pr
 
 ### Installation
 
-#### Homebrew (Recommended)
+#### Homebrew (Recommended, Apple Silicon macOS 14+)
 ```bash
 brew tap Smith-Tools/smith
 brew install smith-validation
 ```
+Notes:
+- Bottles are arm64-only (Apple Silicon). Intel/macOS <14 will build from source.
+- Tested on macOS 14+.
 
 #### Build from Source
 ```bash
