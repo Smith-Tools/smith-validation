@@ -2,4 +2,6 @@
 .swiftpm/
 .DS_Store
 xcuserdata/
+Package.resolved
 *.log
+*.tmp
