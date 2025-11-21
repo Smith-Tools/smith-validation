@@ -1,20 +1,29 @@
-import XCTest
-import SmithValidationCore
-import SmithValidation
+import Foundation
 import MaxwellsTCARules
+import SmithValidation
+import SmithValidationCore
+import Testing
 
-final class RulePackTests: XCTestCase {
-    func testMaxwellRulesAgainstProject() throws {
+@Suite
+struct RulePackTests {
+    @Test
+    func maxwellRulesAgainstProject() throws {
         guard let projectRoot = RuleTestEmitter.projectRoot else {
-            XCTFail("SMITH_RULES_PROJECT_ROOT not set")
+            // When invoked via plain `swift test`, the CLI env isn't present; treat as a no-op.
             return
         }
 
-        // Discover Swift files with include/exclude globs passed by smith-validation
-        let includeGlobs = (ProcessInfo.processInfo.environment[RuleTestEmitter.includeGlobsEnv] ?? "**/*.swift").components(separatedBy: ",")
-        let excludeGlobs = (ProcessInfo.processInfo.environment[RuleTestEmitter.excludeGlobsEnv] ?? "").components(separatedBy: ",").filter { !$0.isEmpty }
+        let includeGlobs = (ProcessInfo.processInfo.environment[RuleTestEmitter.includeGlobsEnv] ?? "**/*.swift")
+            .components(separatedBy: ",")
+        let excludeGlobs = (ProcessInfo.processInfo.environment[RuleTestEmitter.excludeGlobsEnv] ?? "")
+            .components(separatedBy: ",")
+            .filter { !$0.isEmpty }
 
-        let files = try FileUtils.findSwiftFiles(in: projectRoot, includeGlobs: includeGlobs, excludeGlobs: excludeGlobs)
+        let files = try FileUtils.findSwiftFiles(
+            in: projectRoot,
+            includeGlobs: includeGlobs,
+            excludeGlobs: excludeGlobs
+        )
         let filePaths = files.map { $0.path }
 
         let rules = registerMaxwellsRules()
