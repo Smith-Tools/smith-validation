@@ -80,6 +80,10 @@ smith-validation --rules-tests /path/to/rule-pack /path/to/project
 - The rule pack is a SwiftPM package with tests that emit findings via `RuleTestEmitter.emit(...)`.
 - smith-validation sets `SMITH_RULES_PROJECT_ROOT`, `SMITH_RULES_INCLUDE`, `SMITH_RULES_EXCLUDE` for the test process.
 - Useful when teams maintain custom rules without rebuilding the CLI.
+- Example pack in this repo: `RulePacks/MaxwellsRulePack` (depends on `SmithValidationCore` and `MaxwellsTCARules`). Run:
+  ```
+  smith-validation --rules-tests RulePacks/MaxwellsRulePack /your/project
+  ```
 
 ### Basic Usage
 
