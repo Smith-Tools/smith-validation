@@ -1,0 +1,1 @@
+/Volumes/Plutonian/_Developer/Maxwells/TCA/validation/Rule_1_5_TightlyCoupledState.swift
