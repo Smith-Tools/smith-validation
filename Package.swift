@@ -49,8 +49,18 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "PklSwift", package: "pkl-swift"),
             ],
             path: "Sources/SmithValidationCore/Sources/SmithValidationCore"
+        ),
+        // Generated PKL configuration
+        .target(
+            name: "GeneratedConfig",
+            dependencies: [
+                .product(name: "PklSwift", package: "pkl-swift"),
+                "SmithValidationCore",
+            ],
+            path: "Sources/GeneratedConfig"
         ),
         // Maxwells TCA rules (symlinked rule sources)
         .target(
@@ -60,14 +70,29 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
             ],
-            path: "Sources/MaxwellsTCARules",
+            path: "Sources/RulePacks",
             sources: [
-                "Rule_1_1_MonolithicFeatures.swift",
-                "Rule_1_2_ClosureInjection.swift",
-                "Rule_1_3_CodeDuplication.swift",
-                "Rule_1_4_UnclearOrganization.swift",
-                "Rule_1_5_TightlyCoupledState.swift",
-                "Registrar.swift"
+                "TCA/Rule_1_1_MonolithicFeatures.swift",
+                "TCA/Rule_1_2_ClosureInjection.swift",
+                "TCA/Rule_1_3_CodeDuplication.swift",
+                "TCA/Rule_1_4_UnclearOrganization.swift",
+                "TCA/Rule_1_5_TightlyCoupledState.swift",
+                "TCA/Rule_2_1_ErrorHandling.swift",
+                "TCA/Rule_2_2_ReducibleComplexity.swift",
+                "TCA/TCARegistrar.swift",
+                "SwiftUI/Rule_SwiftUI_1_ViewBodyComplexity.swift",
+                "SwiftUI/Rule_SwiftUI_1_2_StateManagement.swift",
+                "SwiftUI/SwiftUIRegistrar.swift",
+                // Temporarily disabled Performance rules due to SwiftSyntax API issues
+                // "Performance/Rule_1_1_MemoryManagement.swift",
+                // "Performance/Rule_1_2_CPUUsagePatterns.swift",
+                // "Performance/Rule_1_3_PerformanceAntiPatterns.swift",
+                // "Performance/Rule_1_4_ConcurrencyIssues.swift",
+                // "Performance/PerformanceRegistrar.swift",
+                "General/Rule_General_1_CircularDependencies.swift",
+                "General/Rule_General_1_2_ModuleDependencies.swift",
+                "General/GeneralRegistrar.swift",
+                "RulePackRegistry.swift"
             ]
         ),
         // Core library
@@ -90,6 +115,8 @@ let package = Package(
                 "SmithValidation",
                 "SmithValidationCore",
                 "MaxwellsTCARules",
+                // GeneratedConfig temporarily disabled
+                // "GeneratedConfig",
             ],
             path: "Sources/smith-validation"
         ),

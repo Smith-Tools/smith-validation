@@ -52,6 +52,18 @@ public extension SourceFileSyntax {
         let source = try String(contentsOf: url)
         return try parse(source: source)
     }
+
+    /// Find all SwiftUI Views in this file
+    /// - Returns: Array of StructInfo for structs conforming to View or with View naming patterns
+    public func findSwiftUIViews() -> [StructInfo] {
+        var views: [StructInfo] = []
+
+        let visitor = SwiftUIViewVisitor(viewMode: .sourceAccurate)
+        visitor.walk(self)
+        views = visitor.views
+
+        return views
+    }
 }
 
 // MARK: - Syntax Visitor for TCA Reducer Detection
@@ -74,6 +86,54 @@ private class TCAReducerVisitor: SyntaxVisitor {
         }
 
         return .skipChildren
+    }
+}
+
+// MARK: - Syntax Visitor for SwiftUI View Detection
+
+private class SwiftUIViewVisitor: SyntaxVisitor {
+    var views: [StructInfo] = []
+
+    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        // Check if struct conforms to View protocol or has View naming patterns
+        let conformsToView = node.inheritanceClause?.inheritedTypes.contains { element in
+            element.type.description.trimmingCharacters(in: .whitespacesAndNewlines) == "View"
+        } ?? false
+
+        // Check for common SwiftUI View naming patterns
+        let viewNamingPatterns = ["View", "View_", "ContentView", "DetailView", "ListView"]
+        let hasViewNamingPattern = viewNamingPatterns.contains { pattern in
+            node.identifier.text.contains(pattern)
+        }
+
+        // Check if struct has a body method (common for SwiftUI Views)
+        let hasBodyMethod = node.memberBlock.members.contains { member in
+            if let function = member.decl.as(FunctionDeclSyntax.self) {
+                return function.identifier.text == "body"
+            }
+            return false
+        }
+
+        // More accurate SwiftUI View detection
+        let isSwiftUIView = conformsToView || (
+            node.identifier.text.hasSuffix("View") &&
+            hasBodyMethod &&
+            !isRuleOrTestClass(node.identifier.text)
+        )
+
+        if isSwiftUIView {
+            views.append(StructInfo(from: node))
+        }
+
+        return .skipChildren
+    }
+
+    private func isRuleOrTestClass(_ name: String) -> Bool {
+        // Exclude rule implementations and test files from SwiftUI detection
+        let excludedPatterns = ["Rule", "Test", "Mock", "Fake", "Validator", "Registrar"]
+        return excludedPatterns.contains { pattern in
+            name.contains(pattern)
+        }
     }
 }
 

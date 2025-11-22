@@ -1,0 +1,99 @@
+{
+  "domainConfig": {
+    "tca": {
+      "rule_1_1_MonolithicFeatures": {
+        "enabled": true,
+        "severity": "medium",
+        "maxMethods": 30,
+        "maxNestedTypes": 8,
+        "maxProperties": 25,
+        "maxEstimatedComplexity": 100
+      },
+      "rule_1_2_ClosureInjection": {
+        "enabled": true,
+        "severity": "high",
+        "maxServiceClients": 8,
+        "maxDependencyMethods": 15,
+        "maxGlobalDependencies": 5
+      },
+      "rule_1_3_CodeDuplication": {
+        "enabled": true,
+        "severity": "medium",
+        "minSimilarityThreshold": 0.85,
+        "maxDuplicateLines": 10
+      },
+      "rule_1_4_UnclearOrganization": {
+        "enabled": true,
+        "severity": "medium",
+        "maxFeaturesPerFile": 5,
+        "maxMixedResponsibilityClasses": 3,
+        "maxNestedFeatures": 4
+      },
+      "rule_1_5_TightlyCoupledState": {
+        "enabled": true,
+        "severity": "medium",
+        "maxStateProperties": 20,
+        "maxCrossFeatureReferences": 8,
+        "maxDirectStateMutations": 15
+      },
+      "rule_2_1_ErrorHandling": {
+        "enabled": true,
+        "severity": "high",
+        "requireResultHandling": true,
+        "maxUnhandledAsyncOperations": 0,
+        "requireErrorState": true
+      },
+      "rule_2_2_ReducibleComplexity": {
+        "enabled": true,
+        "severity": "medium",
+        "maxSwitchCases": 25,
+        "maxNestingDepth": 6,
+        "maxAsyncOperations": 7
+      }
+    },
+    "swiftui": {
+      "rule_1_1_ViewBodyComplexity": {
+        "enabled": true,
+        "severity": "medium",
+        "maxViewBodyLines": 100,
+        "maxNestingDepth": 8,
+        "maxConditionalStatements": 15,
+        "maxViewModifiers": 30
+      },
+      "rule_1_2_StateManagement": {
+        "enabled": true,
+        "severity": "medium",
+        "maxStateProperties": 12,
+        "maxComplexStateProperties": 5
+      }
+    },
+    "general": {
+      "rule_1_1_CircularDependencies": {
+        "enabled": true,
+        "severity": "high",
+        "maxDependencyDepth": 10
+      },
+      "rule_1_2_ModuleDependencies": {
+        "enabled": true,
+        "severity": "medium",
+        "maxImportsPerFile": 25,
+        "maxDependencyDepth": 8,
+        "maxModuleDependencies": 20
+      }
+    }
+  },
+  "globalSettings": {
+    "outputFormat": "console",
+    "includePatterns": [
+      "**/*.swift"
+    ],
+    "excludePatterns": [
+      "**/*.generated.swift",
+      "**/DerivedData/**",
+      "**/build/**"
+    ],
+    "maxViolations": 100,
+    "failOnViolations": false,
+    "minSeverity": "low"
+  }
+}

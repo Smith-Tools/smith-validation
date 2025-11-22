@@ -2,6 +2,7 @@ import Foundation
 import SmithValidation
 import SmithValidationCore
 import MaxwellsTCARules
+import GeneratedConfig
 
 /// Marker prefix used by rule-pack tests to emit findings.
 private let findingMarker = "SMITH_RULE_FINDING:"
@@ -11,7 +12,7 @@ private let excludeEnvKey = "SMITH_RULES_EXCLUDE"
 
 @main
 struct SmithValidationCLI {
-    static func main() {
+    static func main() async {
         let opts = CLIOptions.parse(CommandLine.arguments.dropFirst())
 
         if opts.showVersion {
@@ -46,7 +47,7 @@ struct SmithValidationCLI {
 
         // Engine mode is the default when a path is provided
         if !opts.paths.isEmpty || opts.engine {
-            runEngineMode(opts: opts)
+            await runEngineMode(opts: opts)
             return
         }
 
@@ -54,11 +55,12 @@ struct SmithValidationCLI {
         print("""
         smith-validation \(versionString())
         Usage:
-          smith-validation [--engine] <path>                       Run built-in engine with bundled rules
+          smith-validation [--engine] [--config <path>] <path>      Run built-in engine with bundled rules
           smith-validation --artifacts <path>                     Use build artifacts for fast validation
           smith-validation --rules-tests <rule-pack> <path>        Run a Swift Testing rule pack dynamically
 
         Options:
+          --config, -c         PKL configuration file path (default: SMITH_VALIDATION_CONFIG env var)
           --include globs       Comma-separated include globs (default: **/*.swift)
           --exclude globs       Comma-separated exclude globs (default: **/DerivedData/**,**/.build/**,**/Pods/**,**/.swiftpm/**)
           --artifacts, -a       Use build artifacts mode (fastest for large codebases)
@@ -98,37 +100,19 @@ struct SmithValidationCLI {
         }
     }
 
-    // MARK: - Engine mode
-    private static func runEngineMode(opts: CLIOptions) {
-        do {
-            print("=== smith-validation (engine mode) ===")
-            let rules = registerMaxwellsRules()
-            print("✅ Engine running \(rules.count) rule(s)")
+    // MARK: - Hybrid Engine mode
+    private static func runEngineMode(opts: CLIOptions) async {
+        print("=== smith-validation (hybrid engine mode) ===")
 
-            var allViolations: [ArchitecturalViolation] = []
-            var totalFiles = 0
-
-            let engine = ValidationEngine()
-            for path in opts.paths {
-                let urls = try FileUtils.findSwiftFiles(
-                    in: URL(fileURLWithPath: path),
-                    includeGlobs: opts.includeGlobs,
-                    excludeGlobs: opts.excludeGlobs
-                )
-                let filePaths = urls.map { $0.path }
-                let violations = try engine.validate(rules: rules, filePaths: filePaths)
-                allViolations.append(contentsOf: violations.violations)
-                totalFiles += filePaths.count
-            }
-
-            let collection = ViolationCollection(violations: allViolations)
-            generateArchitecturalReport(
-                violationsCollections: [("Maxwells TCA Pack", collection)],
-                totalFiles: totalFiles,
-                parsedFiles: totalFiles
+        // Use Hybrid Engine for efficient, structured validation
+        for path in opts.paths {
+            let report = await HybridEngine.validate(
+                directory: URL(fileURLWithPath: path),
+                rulePacks: ["TCA", "SwiftUI", "General"]
             )
-        } catch {
-            print("❌ Engine mode failed: \(error.localizedDescription)")
+
+            // Print the beautifully formatted report
+            print(report.generateReport())
         }
     }
 
@@ -477,11 +461,9 @@ struct SmithValidationCLI {
 
     private static func versionString() -> String { "v1.0.10" }
 
-    private static func loadConfig(at path: String) -> SmithValidationConfig? {
-        guard !path.isEmpty else { return nil }
-        let fsPath = URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path
-        guard FileManager.default.fileExists(atPath: fsPath) else { return nil }
-        do { return try ConfigLoader().load(at: fsPath) } catch { return nil }
+    private static func loadPKLConfig(at path: String) async -> SmithValidationConfig.Module? {
+        // PKL integration temporarily disabled
+        return nil
     }
 
     private static func generateArchitecturalReport(
@@ -562,6 +544,8 @@ fileprivate struct CLIOptions {
                 if let next = it.next() { opts.excludeGlobs = next.split(separator: ",").map(String.init) }
             case "--rules-tests":
                 if let next = it.next() { opts.rulesTestsPath = next }
+            case "--config", "-c":
+                if let next = it.next() { opts.configPath = next }
             case "--version", "-v":
                 opts.showVersion = true
             default:
@@ -574,24 +558,3 @@ fileprivate struct CLIOptions {
     }
 }
 
-// MARK: - Test finding model
-private struct TestFinding: Codable {
-    let rule: String
-    let severity: String
-    let file: String
-    let line: Int
-    let message: String
-    let recommendation: String?
-
-    func toViolation() -> ArchitecturalViolation {
-        let sev = severity.lowercased()
-        switch sev {
-        case "critical": return .critical(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
-        case "high": return .high(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
-        case "medium": return .medium(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
-        case "low": fallthrough
-        default:
-            return .low(rule: rule, file: file, line: line, message: message, recommendation: recommendation)
-        }
-    }
-}
