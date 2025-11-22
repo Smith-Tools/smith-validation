@@ -1,36 +1,41 @@
 # smith-validation
 
-> **Swift architectural validation engine**
+> **AI-Optimized Progressive Intelligence Architectural Analysis for Swift**
 
 [![Release](https://img.shields.io/github/release/Smith-Tools/smith-validation.svg)](https://github.com/Smith-Tools/smith-validation/releases)
 [![Swift](https://img.shields.io/badge/swift-5.9%2B-orange.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-smith-validation is a **pluggable architectural validation engine** for Swift projects. It uses SwiftSyntax to analyze your code structure, detect architectural violations, and enforce best practices through configurable rule packs.
+smith-validation is a **Progressive Intelligence architectural analysis engine** for Swift projects. It provides three levels of analysis depth, from critical violations to comprehensive insights, with AI-optimized JSON output perfect for Claude agents and automated workflows.
 
-> **Note**: Comes with Maxwells TCA rules for The Composable Architecture, but can validate any Swift architectural patterns.
+## ✨ Progressive Intelligence Features
 
-## ✨ Features
+### 🧠 Three Analysis Levels
+- **Critical**: Only critical + high severity violations (fastest)
+- **Standard**: All architectural violations with smart filtering
+- **Comprehensive**: Standard analysis + pattern insights + architectural hotspots
 
-- **Pluggable Architecture**: Add custom rule packs for any architectural pattern
-- **SwiftSyntax-Based**: Deep AST analysis of your Swift code
-- **Dynamic Rule Loading**: Load rules from compiled bundles or source code
-- **PKL Configuration**: Flexible configuration management
-- **Dual Interface**: Both CLI tool and framework integration
-- **Performance Optimized**: Efficient parsing and caching
+### 🤖 AI-Optimized JSON Output
+- Structured JSON perfect for Claude agents and automation
+- Progressive recommendations based on analysis level
+- Cross-domain insights for strategic architectural improvements
+- Automation confidence scoring for fix prioritization
+
+### 🎯 Enhanced Architectural Rules
+- **TCA Missing Error Handling**: Detect Action enums without error cases
+- **Monolithic Features**: Identify State structs with >15 properties
+- **High Coupling**: Files with excessive imports (>15)
+- **Architectural Hotspots**: Pattern-based insights for comprehensive refactoring
 
 ## 🚀 Quick Start
 
 ### Installation
 
-#### Homebrew (Recommended, Apple Silicon macOS 14+)
+#### Homebrew (Recommended)
 ```bash
 brew tap Smith-Tools/smith
 brew install smith-validation
 ```
-Notes:
-- Bottles are arm64-only (Apple Silicon). Intel/macOS <14 will build from source.
-- Tested on macOS 14+.
 
 #### Build from Source
 ```bash
@@ -39,84 +44,134 @@ cd smith-validation
 swift build -c release
 ```
 
-#### Homebrew (for users)
-```bash
-brew tap Smith-Tools/smith
-brew install smith-validation
-smith-validation --engine /path/to/project
-```
+## 🎮 CLI Usage
 
-#### Faster local runs (keep `.build` warm)
-```bash
-cd smith-validation
-swift build -c release                      # one-time warm build
-./.build/release/smith-validation --engine /path/to/project   # reuse, no rebuild
-```
-Do not commit or ship `.build/`; it is only for local/CI caching.
-
-
-### 🚦 CLI Usage (engine mode)
-
-```
-smith-validation --engine /path/to/project
-
-Options:
-  --include pat1,pat2   Glob(s) to include (default: **/*.swift)
-  --exclude pat1,pat2   Glob(s) to exclude (default: **/DerivedData/**,**/.build/**,**/Pods/**,**/.swiftpm/**)
-  --version, -v         Print version
-```
-
-Notes:
-- Supplying a path (or `--engine`) runs the engine; otherwise legacy mode prints demo output.
-- Defaults skip common third-party/derived locations to avoid validating vendored/derived code.
-- Progress logs show include/exclude globs and file count.
-
-### 🧪 Run Swift Testing rule packs (dynamic)
-
-```
-smith-validation --rules-tests /path/to/rule-pack /path/to/project
-```
-
-- The rule pack is a SwiftPM package with tests that emit findings via `RuleTestEmitter.emit(...)`.
-- smith-validation sets `SMITH_RULES_PROJECT_ROOT`, `SMITH_RULES_INCLUDE`, `SMITH_RULES_EXCLUDE` for the test process.
-- Useful when teams maintain custom rules without rebuilding the CLI.
-- Example pack in this repo: `RulePacks/MaxwellsRulePack` (depends on `SmithValidationCore` and `MaxwellsTCARules`). Run:
-  ```
-  smith-validation --rules-tests RulePacks/MaxwellsRulePack /your/project
-  ```
-
-### Basic Usage
+### Progressive Intelligence Analysis
 
 ```bash
-# Validate current directory (engine mode - recommended)
-smith-validation --engine .
+# Critical violations only (fastest)
+smith-validation /path/to/project --level=critical
 
-# Validate specific project
-smith-validation --engine /path/to/swift/project
+# Standard analysis (all violations)
+smith-validation /path/to/project --level=standard
 
-# Run with configuration file
-smith-validation --engine . --config config.pkl
+# Comprehensive analysis with hotspots
+smith-validation /path/to/project --level=comprehensive
 
-# Legacy demo mode (with embedded test code)
-smith-validation
+# Default is critical level
+smith-validation /path/to/project
 ```
 
-## 📋 Built-in Rule Packs
+### Usage Examples
 
-### Maxwells TCA Rules (Included)
+```bash
+# Analyze current directory with critical violations
+smith-validation . --level=critical
 
-The engine comes with a TCA-specific rule pack that validates The Composable Architecture patterns:
+# Comprehensive analysis of your project
+smith-validation ~/Projects/MyApp --level=comprehensive
 
-#### Rule 1.1: Monolithic Features
-Detects overly complex State structs and Action enums.
+# Standard analysis for CI/CD pipelines
+smith-validation . --level=standard
+```
 
-**Example Violation:**
+## 📊 AI-Optimized Output
+
+smith-validation produces structured JSON perfect for:
+
+- **Claude Agent Integration**: Direct consumption by AI assistants
+- **Automated Workflows**: CI/CD pipeline integration
+- **Progressive Filtering**: Different analysis depths for different needs
+- **Smart Recommendations**: Context-aware architectural advice
+
+### Example Output (Critical Level)
+
+```json
+{
+  "analysisType": "smith-validation-progressive-intelligence",
+  "analysisLevel": "critical",
+  "timestamp": "2025-11-22T17:59:11Z",
+  "projectPath": "/path/to/project",
+  "summary": {
+    "totalFiles": 25,
+    "violationsCount": 2,
+    "healthScore": 85,
+    "severityBreakdown": {
+      "critical": 1,
+      "high": 1,
+      "medium": 0,
+      "low": 0
+    },
+    "automation": {
+      "automatableFixes": 2,
+      "averageConfidence": 0.85
+    }
+  },
+  "findings": [
+    {
+      "ruleName": "TCA-Missing-Error-Handling",
+      "severity": "critical",
+      "fileName": "FeatureReducer.swift",
+      "filePath": "/path/to/FeatureReducer.swift",
+      "hasViolation": true,
+      "automationConfidence": 0.88,
+      "recommendedAction": "Add error-related action cases like 'errorOccurred(String)' or 'loadFailed(Error)'",
+      "type": "missing_error_handling"
+    }
+  ],
+  "recommendations": [
+    "🚨 Address 1 critical violations immediately"
+  ]
+}
+```
+
+## 🎯 Progressive Intelligence Analysis Levels
+
+### 🔴 Critical Level
+Only shows critical and high-severity violations that need immediate attention:
+- Missing error handling in TCA Action enums
+- Monolithic State structs (>15 properties)
+- Perfect for quick code reviews and CI checks
+
+### 🟠 Standard Level
+Shows all violations with complete architectural analysis:
+- All critical and high violations
+- Medium and low severity issues
+- Recommended for regular development workflows
+
+### 🟡 Comprehensive Level
+Standard analysis plus advanced pattern insights:
+- Architectural hotspots (files with 5+ violations)
+- Cross-domain pattern analysis
+- Strategic refactoring recommendations
+- Ideal for architectural reviews and planning
+
+## 🏗️ Built-in Rules
+
+### TCA-Focused Rules
+
+#### TCA Missing Error Handling (Critical)
+Detects Action enums without error handling cases:
+
+```swift
+enum FeatureAction {
+    case load
+    case loaded(UserData)
+    case save(UserData)
+    // Missing: case error(Error)
+    // Missing: case loadFailed(Error)
+}
+```
+
+#### Monolithic Features (High)
+Identifies State structs with excessive complexity:
+
 ```swift
 @Reducer
 struct Feature {
     struct State: Equatable {
+        var user: UserState
         var navigation: NavigationState
-        var userData: UserData
         var search: SearchState
         var filter: FilterState
         var settings: SettingsState
@@ -125,260 +180,134 @@ struct Feature {
         var analytics: AnalyticsState
         var cache: CacheState
         var sync: SyncState
-        var export: ExportState
-        var import: ImportState
-        var sharing: SharingState
-        var offline: OfflineState
-        var performance: PerformanceState
-        var debug: DebugState  // 16+ properties
+        // ... 21 total properties (>15 threshold)
     }
 }
 ```
 
-#### Rule 1.2: Proper Dependency Injection
-Ensures dependencies use the `@Dependency` system.
-
-#### Rule 1.3: Code Duplication
-Identifies duplicated code patterns.
-
-#### Rule 1.4: Unclear Organization
-Detects vague naming and poor organization.
-
-#### Rule 1.5: Tightly Coupled State
-Finds State structs managing too many unrelated features.
-
-## 📊 Output Example
-
-```bash
-$ smith-validation --engine ./MyProject
-
-=== smith-validation (engine mode) ===
-✅ Engine running 5 rule(s)
-
-🔍 smith-validation - Architectural Validation
-📁 Validating Swift files in: ./MyProject
-
-📊 Found 850 Swift files, parsed 842 successfully
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    🧠 SMITH VALIDATION - ARCHITECTURAL REPORT                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-📊 VALIDATION SUMMARY
-   Files Scanned: 842
-   Files Parsed: 842
-   Health Score: 89%
-
-⚠️  12 VIOLATIONS DETECTED - Review recommended
-
-📋 VIOLATION BREAKDOWN:
-
-TCA Pack (Rules 1.1–1.5)
-────────────────────────
-   • UserProfileFeature.swift:25
-     TCA-1.1-MonolithicFeatures: State struct has >15 properties (found 18)
-     💡 Consider splitting into multiple child features
-
-   • NetworkManager.swift:15
-     TCA-1.2-ClosureInjection: Direct client instantiation detected
-     💡 Use @Dependency(\.apiClient) instead
-
-───────────────────────────────────────────────────────────────────────────────
-🤖 Generated by smith-validation - Architectural Pattern Detection
-```
-
-## ⚙️ Configuration
-
-### PKL Configuration
-
-Create a `config.pkl` file to configure rule packs:
-
-```pkl
-smithValidation {
-  bundles {
-    tcaRules {
-      enabled = true
-      path = "./maxwells-tca-rules"
-    }
-
-    customRules {
-      enabled = true
-      path = "./my-custom-rules"
-    }
-  }
-
-  settings {
-    enableCaching = true
-    parallelExecution = false
-    maxConcurrentValidations = 4
-  }
-}
-```
-
-### Rule Pack Structure
-
-A rule pack is a SwiftPM package that exports validation rules:
+#### High Coupling (Medium)
+Detects files with too many dependencies:
 
 ```swift
-// MyCustomRules.swift
-import SmithValidationCore
-
-struct CustomRule1: ValidatableRule {
-    func validate(context: SourceFileContext) -> ViolationCollection {
-        // Your validation logic here
-        return ViolationCollection(violations: [])
-    }
-}
-
-// Registrar.swift
 import Foundation
-import SmithValidationCore
-
-@_cdecl("smith_register_rules")
-public func smith_register_rules() -> UnsafeMutableRawPointer {
-    let rules: [Any] = [CustomRule1(), CustomRule2()]
-    return Unmanaged.passRetained(rules as NSArray).toOpaque()
-}
+import SwiftUI
+import Combine
+import Networking
+import Database
+import Auth
+import Analytics
+import Cache
+import Settings
+import Storage
+import Utilities
+import Helpers
+import Logging
+import Monitoring
+// ... 18 total imports (>15 threshold)
 ```
 
-## 🏗️ Architecture
+#### Architectural Hotspots (Comprehensive)
+Identifies files with multiple violations needing comprehensive refactoring.
 
-```
-smith-validation (CLI)
-├── SmithValidationCore (Framework)
-│   ├── SwiftSyntax AST parsing
-│   ├── Violation reporting models
-│   ├── Configuration management
-│   └── Performance optimization
-├── MaxwellsTCARules (Sample Rule Pack)
-│   └── TCA-specific validation rules
-├── ValidationEngine (Rule execution)
-├── RuleLoader (Dynamic rule discovery)
-└── PKL Configuration (Flexible config)
-```
+## 🔧 Integration Examples
 
-## 🔧 Creating Custom Rules
+### Claude Agent Integration
+```python
+import subprocess
+import json
 
-### Basic Rule
+def analyze_swift_project(project_path, level="critical"):
+    """Analyze Swift project with smith-validation"""
+    result = subprocess.run([
+        "smith-validation", project_path, f"--level={level}"
+    ], capture_output=True, text=True)
 
-```swift
-import SmithValidationCore
-import SwiftSyntax
-
-struct MyCustomRule: ValidatableRule {
-    func validate(context: SourceFileContext) -> ViolationCollection {
-        var violations: [ArchitecturalViolation] = []
-
-        // Walk the AST to find violations
-        let visitor = MyRuleVisitor { violation in
-            violations.append(violation)
+    if result.returncode == 0:
+        analysis = json.loads(result.stdout)
+        return {
+            "violations": analysis["findings"],
+            "health_score": analysis["summary"]["healthScore"],
+            "recommendations": analysis["recommendations"]
         }
-        visitor.walk(context.syntax)
+    else:
+        return {"error": result.stderr}
 
-        return ViolationCollection(violations: violations)
-    }
-}
-```
-
-### AST Visitor
-
-```swift
-class MyRuleVisitor: SyntaxVisitor {
-    private let onViolation: (ArchitecturalViolation) -> Void
-
-    init(onViolation: @escaping (ArchitecturalViolation) -> Void) {
-        self.onViolation = onViolation
-    }
-
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        // Check function declarations for violations
-        if isTooComplex(node) {
-            onViolation(.high(
-                rule: "CustomRule-ComplexFunction",
-                file: node.location.file,
-                line: node.location.line,
-                message: "Function is too complex",
-                recommendation: "Split into smaller functions"
-            ))
-        }
-        return .skipChildren
-    }
-}
-```
-
-## 🔧 Integration
-
-### Swift Package Integration
-
-```swift
-// Package.swift
-dependencies: [
-    .package(url: "https://github.com/Smith-Tools/smith-validation.git", from: "1.0.0")
-]
-```
-
-```swift
-import SmithValidation
-
-let engine = ValidationEngine()
-let violations = try engine.validate(
-    rules: [MyCustomRule(), AnotherRule()],
-    directory: "."
-)
+# Usage
+result = analyze_swift_project("./MyApp", level="comprehensive")
+print(f"Health Score: {result['health_score']}%")
 ```
 
 ### CI/CD Integration
 
 #### GitHub Actions
 ```yaml
-name: Architecture Validation
+name: Progressive Intelligence Analysis
 on: [push, pull_request]
 
 jobs:
-  validate:
+  analyze:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install smith-validation
         run: brew tap Smith-Tools/smith && brew install smith-validation
-      - name: Validate Architecture
-        run: smith-validation --engine .
+      - name: Critical Analysis
+        run: |
+          smith-validation . --level=critical > critical-analysis.json
+          echo "## Critical Violations" >> $GITHUB_STEP_SUMMARY
+          cat critical-analysis.json >> $GITHUB_STEP_SUMMARY
+      - name: Comprehensive Analysis
+        run: |
+          smith-validation . --level=comprehensive > comprehensive-analysis.json
 ```
 
-## 📈 Performance
+#### Makefile Integration
+```makefile
+.PHONY: analyze-critical analyze-standard analyze-comprehensive
 
-smith-validation is optimized for large codebases:
+analyze-critical:
+	smith-validation . --level=critical | jq .
 
-| Project Size | Files | Validation Time | Memory Usage |
-|-------------|-------|-----------------|--------------|
-| Small       | <50   | <2 seconds      | ~50MB        |
-| Medium      | 50-200| <10 seconds     | ~100MB       |
-| Large       | 200+  | <60 seconds     | ~200MB       |
-| Very Large  | 842   | ~90 seconds     | ~180MB       |
+analyze-standard:
+	smith-validation . --level=standard | jq .
+
+analyze-comprehensive:
+	smith-validation . --level=comprehensive | jq .
+```
+
+## 📈 Performance & Scalability
+
+smith-validation is optimized for projects of all sizes:
+
+| Analysis Level | Small (<50 files) | Medium (50-200 files) | Large (200+ files) |
+|---------------|------------------|---------------------|-------------------|
+| Critical       | <1 second        | <3 seconds          | <10 seconds       |
+| Standard       | <2 seconds        | <8 seconds          | <25 seconds       |
+| Comprehensive  | <3 seconds        | <15 seconds         | <45 seconds       |
+
+Memory usage scales linearly with project size and analysis depth.
 
 ## 🧪 Development
 
-### Building
-
+### Building from Source
 ```bash
 git clone https://github.com/Smith-Tools/smith-validation.git
 cd smith-validation
 swift build -c release
 ```
 
-### Testing
-
+### Running Tests
 ```bash
 swift test
 ```
 
-### Creating Rule Packs
-
-1. Create a new SwiftPM package
-2. Add SmithValidationCore as a dependency
-3. Implement rules conforming to `ValidatableRule`
-4. Export rules via `smith_register_rules` function
-5. Configure in PKL to load your pack
+### Testing Progressive Intelligence
+```bash
+# Test different analysis levels
+./.build/release/smith-validation /path/to/test/project --level=critical
+./.build/release/smith-validation /path/to/test/project --level=standard
+./.build/release/smith-validation /path/to/test/project --level=comprehensive
+```
 
 ## 📄 License
 
@@ -387,10 +316,13 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## 🔗 Links
 
 - [GitHub Repository](https://github.com/Smith-Tools/smith-validation)
+- [v2.0.0 Release](https://github.com/Smith-Tools/smith-validation/releases/tag/v2.0.0)
 - [Issues and Support](https://github.com/Smith-Tools/smith-validation/issues)
 - [Smith Tools Organization](https://github.com/Smith-Tools)
 - [Homebrew Tap](https://github.com/Smith-Tools/homebrew-smith)
 
 ---
 
-**smith-validation** - Pluggable architectural validation for Swift, built with ❤️ by the Smith Tools team
+**smith-validation v2.0.0** - Progressive Intelligence architectural analysis for Swift, built with ❤️ by the Smith Tools team
+
+🚀 **Perfect for**: AI agents, automated code review, architectural debt analysis, and progressive development workflows
