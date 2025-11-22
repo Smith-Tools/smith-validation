@@ -5,9 +5,9 @@ import Foundation
 
 struct HonestAnalyzer {
 
-    /// Perform honest architectural analysis on a real project
-    func analyzeProject(at path: String) -> AIValidationResult {
-        var findings: [ArchitecturalFinding] = []
+    /// Perform honest architectural analysis on a real project with configurable detail level
+    func analyzeProject(at path: String, level: AnalysisLevel = .critical) -> AIValidationResult {
+        var allFindings: [ArchitecturalFinding] = []
         var fileCount = 0
         var totalLines = 0
 
@@ -17,33 +17,154 @@ struct HonestAnalyzer {
 
         for file in swiftFiles {
             if let finding = analyzeFile(file) {
-                findings.append(finding)
+                allFindings.append(finding)
                 totalLines += finding.lines
             }
         }
 
+        // Filter findings based on analysis level
+        let filteredFindings = filterFindingsByLevel(allFindings, level: level)
+        let summary = generateSummary(for: filteredFindings, allFindings: allFindings, fileCount: fileCount, totalLines: totalLines, level: level)
+        let recommendations = generateRecommendationsByLevel(filteredFindings, level: level)
+
         return AIValidationResult(
             timestamp: ISO8601DateFormatter().string(from: Date()),
             projectPath: path,
-            summary: Summary(
-                totalFiles: fileCount,
-                totalLines: totalLines,
-                violationsCount: findings.filter { $0.hasViolation }.count,
-                healthScore: calculateHealthScore(findings),
-                severityBreakdown: SeverityBreakdown(
-                    critical: findings.filter { $0.severity == .critical }.count,
-                    high: findings.filter { $0.severity == .high }.count,
-                    medium: findings.filter { $0.severity == .medium }.count,
-                    low: findings.filter { $0.severity == .low }.count
-                ),
-                automation: Automation(
-                    automatableFixes: findings.filter { $0.automationConfidence > 0.7 }.count,
-                    averageConfidence: findings.isEmpty ? 1.0 : findings.reduce(0) { $0 + $1.automationConfidence } / Double(findings.count)
-                )
-            ),
-            findings: findings,
-            recommendations: generateRecommendations(findings)
+            summary: summary,
+            findings: filteredFindings,
+            recommendations: recommendations,
+            analysisLevel: level
         )
+    }
+
+    // MARK: - Progressive Intelligence Implementation
+
+    private func filterFindingsByLevel(_ findings: [ArchitecturalFinding], level: AnalysisLevel) -> [ArchitecturalFinding] {
+        switch level {
+        case .critical:
+            // Only critical + high severity violations
+            return findings.filter { $0.hasViolation && ($0.severity == .critical || $0.severity == .high) }
+        case .standard:
+            // All violations (current behavior)
+            return findings.filter { $0.hasViolation }
+        case .comprehensive:
+            // All violations + additional insights (generated separately)
+            return findings.filter { $0.hasViolation }
+        }
+    }
+
+    private func generateSummary(for findings: [ArchitecturalFinding], allFindings: [ArchitecturalFinding], fileCount: Int, totalLines: Int, level: AnalysisLevel) -> Summary {
+        let violations = findings.filter { $0.hasViolation }
+
+        // Calculate health score based on filtered findings
+        let healthScore = calculateHealthScore(violations)
+
+        // Severity breakdown
+        let severityBreakdown = SeverityBreakdown(
+            critical: violations.filter { $0.severity == .critical }.count,
+            high: violations.filter { $0.severity == .high }.count,
+            medium: violations.filter { $0.severity == .medium }.count,
+            low: violations.filter { $0.severity == .low }.count
+        )
+
+        // Automation metrics
+        let automation = Automation(
+            automatableFixes: violations.filter { $0.automationConfidence > 0.7 }.count,
+            averageConfidence: violations.isEmpty ? 1.0 : violations.reduce(0) { $0 + $1.automationConfidence } / Double(violations.count)
+        )
+
+        // For critical mode, show total violations count from all findings for context
+        let violationsCount = level == .critical ? allFindings.filter { $0.hasViolation }.count : violations.count
+
+        return Summary(
+            totalFiles: fileCount,
+            totalLines: totalLines,
+            violationsCount: violationsCount,
+            healthScore: healthScore,
+            severityBreakdown: severityBreakdown,
+            automation: automation
+        )
+    }
+
+    private func generateRecommendationsByLevel(_ findings: [ArchitecturalFinding], level: AnalysisLevel) -> [String] {
+        let violations = findings.filter { $0.hasViolation }
+        let critical = violations.filter { $0.severity == .critical }
+        let high = violations.filter { $0.severity == .high }
+
+        var recommendations: [String] = []
+
+        switch level {
+        case .critical:
+            // Focus on immediate action items
+            if !critical.isEmpty {
+                recommendations.append("🚨 Address \(critical.count) critical violations immediately")
+            }
+            if !high.isEmpty {
+                recommendations.append("⚠️ Review \(high.count) high-priority violations")
+            }
+            recommendations.append("💡 Use --level=standard for complete analysis")
+
+        case .standard:
+            // Standard comprehensive recommendations
+            if !critical.isEmpty {
+                recommendations.append("🚨 Address \(critical.count) critical violations immediately")
+            }
+            if !high.isEmpty {
+                recommendations.append("⚠️ Review \(high.count) high-priority violations")
+            }
+            if violations.count > 10 {
+                recommendations.append("📊 Consider architectural refactoring - multiple violations detected")
+            }
+            if violations.isEmpty {
+                recommendations.append("✅ Excellent architectural quality maintained")
+            } else {
+                recommendations.append("🔧 Address violations systematically")
+            }
+
+        case .comprehensive:
+            // Include strategic insights
+            recommendations.append(contentsOf: generateStandardRecommendations(violations))
+
+            // Add strategic insights
+            let ruleGroups = Dictionary(grouping: violations) { $0.ruleName }
+            if ruleGroups.count > 5 {
+                recommendations.append("📈 \(ruleGroups.count) different rule types triggered - consider holistic architectural review")
+            }
+
+            let largeFiles = violations.filter { $0.type == "large_file" }
+            if largeFiles.count > violations.count / 2 {
+                recommendations.append("📏 File size is primary concern - consider modularization strategy")
+            }
+        }
+
+        return recommendations
+    }
+
+    private func generateStandardRecommendations(_ violations: [ArchitecturalFinding]) -> [String] {
+        let critical = violations.filter { $0.severity == .critical }
+        let high = violations.filter { $0.severity == .high }
+
+        var recommendations: [String] = []
+
+        if !critical.isEmpty {
+            recommendations.append("🚨 Address \(critical.count) critical violations immediately")
+        }
+
+        if !high.isEmpty {
+            recommendations.append("⚠️ Review \(high.count) high-priority violations")
+        }
+
+        if violations.count > 10 {
+            recommendations.append("📊 Consider architectural refactoring - multiple violations detected")
+        }
+
+        if violations.isEmpty {
+            recommendations.append("✅ Excellent architectural quality maintained")
+        } else {
+            recommendations.append("🔧 Address violations systematically using analysis")
+        }
+
+        return recommendations
     }
 
     // MARK: - Private Analysis Methods

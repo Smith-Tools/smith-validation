@@ -11,13 +11,33 @@ struct SmithValidationCLI {
         let args = CommandLine.arguments
 
         guard args.count >= 2 else {
-            print(jsonError("Usage: smith-validation <project-path> [--typescript] [--reload]"))
+            print(jsonError("Usage: smith-validation <project-path> [--level=critical|standard|comprehensive] [--typescript] [--reload]"))
             return
         }
 
         let projectPath = args[1]
         let shouldReload = args.contains("--reload")
         let useTypeScriptRules = args.contains("--typescript")
+
+        // Parse analysis level (default: critical)
+        var analysisLevel: AnalysisLevel = .critical
+        if let levelArg = args.first(where: { $0.hasPrefix("--level=") }) {
+            let components = levelArg.components(separatedBy: "=")
+            if components.count == 2 {
+                let levelValue = components[1]
+                switch levelValue {
+                case "critical":
+                    analysisLevel = .critical
+                case "standard":
+                    analysisLevel = .standard
+                case "comprehensive":
+                    analysisLevel = .comprehensive
+                default:
+                    print(jsonError("Invalid level '\(levelValue)'. Use: critical, standard, or comprehensive"))
+                    return
+                }
+            }
+        }
 
         // Validate project exists
         guard FileManager.default.fileExists(atPath: projectPath) else {
@@ -32,15 +52,15 @@ struct SmithValidationCLI {
             let analyzer = FileBackedAnalyzer()
 
             do {
-                let result = try analyzer.analyzeProject(at: projectPath, reloadRules: shouldReload)
+                let result = try analyzer.analyzeProject(at: projectPath, reloadRules: shouldReload, analysisLevel: analysisLevel)
                 print(result.asJSON())
             } catch {
                 print(jsonError("TypeScript analysis failed: \(error.localizedDescription)"))
             }
         } else {
-            // DEFAULT: Use HonestAnalyzer for AI-optimized JSON output
+            // DEFAULT: Use HonestAnalyzer for AI-optimized JSON output with progressive intelligence
             let analyzer = HonestAnalyzer()
-            let result = analyzer.analyzeProject(at: projectPath)
+            let result = analyzer.analyzeProject(at: projectPath, level: analysisLevel)
             print(result.asJSON())
         }
     }
@@ -49,11 +69,43 @@ struct SmithValidationCLI {
         return """
 {
   "error": "\(message)",
-  "usage": "smith-validation <project-path> [--typescript] [--reload]",
+  "usage": "smith-validation <project-path> [--level=critical|standard|comprehensive] [--typescript] [--reload]",
   "description": "Smith Validation - AI-Optimized Architectural Analysis (default)"
 }
 """
     }
+}
+
+// MARK: - Analysis Levels
+
+enum AnalysisLevel {
+    case critical        // Only critical + high severity violations
+    case standard        // All violations (current behavior)
+    case comprehensive   // Standard + pattern analysis
+}
+
+// MARK: - Extended Data Structures for Comprehensive Analysis
+
+struct ViolationPattern: Codable {
+    let ruleName: String
+    let count: Int
+    let severity: ViolationSeverity
+    let affectedFiles: [String]
+}
+
+struct ArchitecturalHotspot: Codable {
+    let directory: String
+    let violationCount: Int
+    let criticalViolations: Int
+    let recommendation: String
+}
+
+struct ComprehensiveSummary: Codable {
+    let baseSummary: Summary
+    let violationPatterns: [ViolationPattern]
+    let ruleEffectiveness: [String: Double]
+    let architecturalHotspots: [ArchitecturalHotspot]
+    let crossDomainInsights: [String]
 }
 
 SmithValidationCLI.main()
@@ -81,7 +133,7 @@ struct FileBackedAnalyzer {
         }
     }
 
-    func analyzeProject(at path: String, reloadRules: Bool) throws -> AIValidationResult {
+    func analyzeProject(at path: String, reloadRules: Bool, analysisLevel: AnalysisLevel = .standard) throws -> AIValidationResult {
         if reloadRules {
             print("🔄 Reloading rules from files...")
             _ = fileEngine.reloadRules()
@@ -154,7 +206,8 @@ struct FileBackedAnalyzer {
                 )
             ),
             findings: findings,
-            recommendations: generateRecommendations(findings)
+            recommendations: generateRecommendations(findings),
+            analysisLevel: analysisLevel
         )
     }
 
@@ -308,14 +361,16 @@ struct DeclarationInfo {
 
 struct AIValidationResult: Codable {
     let analysisType: String
+    let analysisLevel: String
     let timestamp: String
     let projectPath: String
     let summary: Summary
     let findings: [ArchitecturalFinding]
     let recommendations: [String]
 
-    init(timestamp: String, projectPath: String, summary: Summary, findings: [ArchitecturalFinding], recommendations: [String]) {
+    init(timestamp: String, projectPath: String, summary: Summary, findings: [ArchitecturalFinding], recommendations: [String], analysisLevel: AnalysisLevel) {
         self.analysisType = "smith-validation-ai-optimized-analysis"
+        self.analysisLevel = String(describing: analysisLevel)
         self.timestamp = timestamp
         self.projectPath = projectPath
         self.summary = summary
