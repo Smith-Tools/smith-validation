@@ -1,20 +1,23 @@
 import Foundation
 import SourceKittenFramework
+import SQLite
 
-/// Smith Validation CLI with SourceKit integration and Human-Friendly Rule Builder
-/// Clean architecture: Direct consumption of RulePacks via SourceKit semantic analysis
-
+/// Smith Validation CLI with File-based TypeScript Rule Engine
+/// New architecture: Swift Orchestration -> TypeScript Files -> JavaScript Execution -> SQLite Analytics
+///
 struct SmithValidationCLI {
 
     static func main() {
         let args = CommandLine.arguments
 
-        guard args.count == 2 else {
-            print(jsonError("Usage: smith-validation <project-path>"))
+        guard args.count >= 2 else {
+            print(jsonError("Usage: smith-validation <project-path> [--typescript] [--reload]"))
             return
         }
 
         let projectPath = args[1]
+        let shouldReload = args.contains("--reload")
+        let useTypeScriptRules = args.contains("--typescript")
 
         // Validate project exists
         guard FileManager.default.fileExists(atPath: projectPath) else {
@@ -22,20 +25,32 @@ struct SmithValidationCLI {
             return
         }
 
-        // Run SourceKit-based analysis with new rule builder
-        let analyzer = SourceKitAnalyzer()
-        let result = analyzer.analyzeProject(at: projectPath)
+        // Default: AI-optimized JSON output for agents
+        // Optional: Advanced TypeScript rules with --typescript flag
+        if useTypeScriptRules {
+            // Run advanced file-based TypeScript analysis
+            let analyzer = FileBackedAnalyzer()
 
-        // Output AI-optimized JSON
-        print(result.asJSON())
+            do {
+                let result = try analyzer.analyzeProject(at: projectPath, reloadRules: shouldReload)
+                print(result.asJSON())
+            } catch {
+                print(jsonError("TypeScript analysis failed: \(error.localizedDescription)"))
+            }
+        } else {
+            // DEFAULT: Use HonestAnalyzer for AI-optimized JSON output
+            let analyzer = HonestAnalyzer()
+            let result = analyzer.analyzeProject(at: projectPath)
+            print(result.asJSON())
+        }
     }
 
     private static func jsonError(_ message: String) -> String {
         return """
 {
   "error": "\(message)",
-  "usage": "smith-validation <project-path>",
-  "description": "Smith Validation using SourceKit with Human-Friendly Rule Builder"
+  "usage": "smith-validation <project-path> [--typescript] [--reload]",
+  "description": "Smith Validation - AI-Optimized Architectural Analysis (default)"
 }
 """
     }
@@ -43,12 +58,36 @@ struct SmithValidationCLI {
 
 SmithValidationCLI.main()
 
-// MARK: - Enhanced SourceKit Analyzer with Rule Builder Integration
+// MARK: - File-Backed Analyzer
 
-struct SourceKitAnalyzer {
+struct FileBackedAnalyzer {
+    private let database: RuleDatabase
+    private let fileEngine: FileBasedRuleEngine
 
-    func analyzeProject(at path: String) -> AIValidationResult {
-        print("🔍 Starting SourceKit-based architectural analysis with human-friendly rules...")
+    init() {
+        do {
+            // Initialize database for analytics
+            self.database = try RuleDatabase()
+
+            // Initialize file-based rule engine
+            self.fileEngine = FileBasedRuleEngine(database: database)
+
+            // Load rules on startup
+            _ = fileEngine.loadRules()
+
+            print("🚀 File-Backed Analyzer initialized successfully")
+        } catch {
+            fatalError("Failed to initialize analyzer: \(error)")
+        }
+    }
+
+    func analyzeProject(at path: String, reloadRules: Bool) throws -> AIValidationResult {
+        if reloadRules {
+            print("🔄 Reloading rules from files...")
+            _ = fileEngine.reloadRules()
+        }
+
+        print("🔍 Starting file-based architectural analysis with TypeScript rules...")
 
         var findings: [ArchitecturalFinding] = []
         var fileCount = 0
@@ -59,21 +98,37 @@ struct SourceKitAnalyzer {
         fileCount = swiftFiles.count
         print("📁 Found \(fileCount) Swift files")
 
-        // Get all registered rules
-        let rules = RuleRegistry.shared.getAllRules()
-        print("📋 Loaded \(rules.count) architectural rules")
-
-        // Analyze each file with SourceKit
+        // Analyze each file with TypeScript rules
         for (index, file) in swiftFiles.enumerated() {
-            let fileFindings = analyzeFileWithRuleBuilder(file, rules: rules)
-            findings.append(contentsOf: fileFindings)
+            do {
+                let fileFindings = try analyzeFileWithFileEngine(file)
+                findings.append(contentsOf: fileFindings)
 
-            if let lineCount = try? String(contentsOf: file, encoding: .utf8).components(separatedBy: .newlines).count {
-                totalLines += lineCount
-            }
+                if let lineCount = try? String(contentsOf: file, encoding: .utf8).components(separatedBy: .newlines).count {
+                    totalLines += lineCount
+                }
 
-            if index % 50 == 0 && index > 0 {
-                print("📖 Processed \(index)/\(fileCount) files...")
+                if index % 50 == 0 && index > 0 {
+                    print("📖 Processed \(index)/\(fileCount) files...")
+                }
+
+            } catch {
+                print("⚠️ Failed to analyze file \(file.lastPathComponent): \(error)")
+
+                // Add an error finding for this file
+                findings.append(ArchitecturalFinding(
+                    fileName: file.lastPathComponent,
+                    filePath: file.path,
+                    ruleName: "File Analysis Error",
+                    severity: .low,
+                    lines: 0,
+                    actualValue: "Cannot analyze file: \(error.localizedDescription)",
+                    expectedValue: "Successful analysis",
+                    hasViolation: true,
+                    automationConfidence: 0.0,
+                    recommendedAction: "Check file syntax and accessibility",
+                    type: "file_analysis_error"
+                ))
             }
         }
 
@@ -103,89 +158,31 @@ struct SourceKitAnalyzer {
         )
     }
 
-    private func analyzeFileWithRuleBuilder(_ url: URL, rules: [Any]) -> [ArchitecturalFinding] {
-        var findings: [ArchitecturalFinding] = []
+    private func analyzeFileWithFileEngine(_ url: URL) throws -> [ArchitecturalFinding] {
+        // Read source code
+        let sourceCode = try String(contentsOf: url, encoding: .utf8)
+        let fileName = url.lastPathComponent
+        let filePath = url.path
+        let lines = sourceCode.components(separatedBy: .newlines).count
 
-        do {
-            let sourceCode = try String(contentsOf: url, encoding: .utf8)
-            let fileName = url.lastPathComponent
-            let filePath = url.path
-            let lines = sourceCode.components(separatedBy: .newlines).count
+        // Parse with SourceKit
+        let file = File(path: filePath)
+        let structure = try Structure(file: file!)
 
-            // Parse with SourceKit
-            let file = File(path: filePath)
-            let structure = try Structure(file: file!)
+        // Extract semantic information
+        let declarations = extractDeclarations(from: structure.dictionary)
 
-            // Extract semantic information
-            let declarations = extractDeclarations(from: structure.dictionary)
+        // Create file analysis data for JavaScript processing
+        let fileData = FileAnalysisData(
+            fileName: fileName,
+            filePath: filePath,
+            sourceCode: sourceCode,
+            lines: lines,
+            declarations: declarations
+        )
 
-            // Create analyzed code object for rule processing
-            let analyzedCode = AnalyzedCode(
-                sourceCode: sourceCode,
-                declarations: declarations,
-                lines: lines
-            )
-
-            // Apply all registered rules
-            for rule in rules {
-                if let simpleRule = rule as? SimpleRule {
-                    if let ruleFindings = simpleRule.apply(
-                        to: analyzedCode,
-                        fileName: fileName,
-                        filePath: filePath,
-                        lines: lines
-                    ) {
-                        findings.append(contentsOf: ruleFindings)
-                    }
-                } else if let arrayRule = rule as? ArrayRule<Any> {
-                    // This is a workaround for generic array rules
-                    // In practice, you'd want better handling here
-                    if let ruleFindings = applyArrayRule(arrayRule, to: analyzedCode, fileName: fileName, filePath: filePath, lines: lines) {
-                        findings.append(contentsOf: ruleFindings)
-                    }
-                }
-            }
-
-            // Apply built-in file size rule
-            if lines > 150 {
-                findings.append(ArchitecturalFinding(
-                    fileName: fileName,
-                    filePath: filePath,
-                    ruleName: "File Size Management",
-                    severity: .high,
-                    lines: lines,
-                    actualValue: "\(lines) lines",
-                    expectedValue: "< 150 lines",
-                    hasViolation: true,
-                    automationConfidence: 0.85,
-                    recommendedAction: "Extract smaller components from large file",
-                    type: "large_file"
-                ))
-            }
-
-        } catch {
-            findings.append(ArchitecturalFinding(
-                fileName: url.lastPathComponent,
-                filePath: url.path,
-                ruleName: "SourceKit Analysis Error",
-                severity: .low,
-                lines: 0,
-                actualValue: "Cannot analyze with SourceKit: \(error.localizedDescription)",
-                expectedValue: "Successful SourceKit parsing",
-                hasViolation: true,
-                automationConfidence: 0.0,
-                recommendedAction: "Check file syntax and SourceKit compatibility",
-                type: "sourcekit_error"
-            ))
-        }
-
-        return findings
-    }
-
-    // Helper method to handle generic array rules
-    private func applyArrayRule<T>(_ rule: ArrayRule<T>, to code: AnalyzedCode, fileName: String, filePath: String, lines: Int) -> [ArchitecturalFinding]? {
-        // This is a simplified approach - in practice you'd want better type safety
-        return rule.apply(to: code, fileName: fileName, filePath: filePath, lines: lines)
+        // Execute all TypeScript rules against this file
+        return fileEngine.executeAllRules(fileData: fileData)
     }
 
     private func extractDeclarations(from dict: [String: Any]) -> [DeclarationInfo] {
@@ -283,7 +280,7 @@ struct SourceKitAnalyzer {
         if violations.isEmpty {
             recommendations.append("✅ Excellent architectural quality maintained")
         } else {
-            recommendations.append("🔧 Address violations systematically using human-friendly rule analysis")
+            recommendations.append("🔧 Address violations systematically using TypeScript rule analysis")
         }
 
         // Add specific rule-based recommendations
@@ -318,7 +315,7 @@ struct AIValidationResult: Codable {
     let recommendations: [String]
 
     init(timestamp: String, projectPath: String, summary: Summary, findings: [ArchitecturalFinding], recommendations: [String]) {
-        self.analysisType = "smith-validation-rule-builder-analysis"
+        self.analysisType = "smith-validation-ai-optimized-analysis"
         self.timestamp = timestamp
         self.projectPath = projectPath
         self.summary = summary
