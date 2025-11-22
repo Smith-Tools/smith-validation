@@ -1,7 +1,7 @@
 import Foundation
 import SourceKittenFramework
 
-/// Smith Validation CLI with SourceKit integration
+/// Smith Validation CLI with SourceKit integration and Human-Friendly Rule Builder
 /// Clean architecture: Direct consumption of RulePacks via SourceKit semantic analysis
 
 struct SmithValidationCLI {
@@ -22,7 +22,7 @@ struct SmithValidationCLI {
             return
         }
 
-        // Run SourceKit-based analysis
+        // Run SourceKit-based analysis with new rule builder
         let analyzer = SourceKitAnalyzer()
         let result = analyzer.analyzeProject(at: projectPath)
 
@@ -35,7 +35,7 @@ struct SmithValidationCLI {
 {
   "error": "\(message)",
   "usage": "smith-validation <project-path>",
-  "description": "Smith Validation using SourceKit for AI-optimized architectural analysis"
+  "description": "Smith Validation using SourceKit with Human-Friendly Rule Builder"
 }
 """
     }
@@ -43,12 +43,12 @@ struct SmithValidationCLI {
 
 SmithValidationCLI.main()
 
-// MARK: - SourceKit Analyzer
+// MARK: - Enhanced SourceKit Analyzer with Rule Builder Integration
 
 struct SourceKitAnalyzer {
 
     func analyzeProject(at path: String) -> AIValidationResult {
-        print("🔍 Starting SourceKit-based architectural analysis...")
+        print("🔍 Starting SourceKit-based architectural analysis with human-friendly rules...")
 
         var findings: [ArchitecturalFinding] = []
         var fileCount = 0
@@ -59,16 +59,20 @@ struct SourceKitAnalyzer {
         fileCount = swiftFiles.count
         print("📁 Found \(fileCount) Swift files")
 
+        // Get all registered rules
+        let rules = RuleRegistry.shared.getAllRules()
+        print("📋 Loaded \(rules.count) architectural rules")
+
         // Analyze each file with SourceKit
         for (index, file) in swiftFiles.enumerated() {
-            let fileFindings = analyzeFileWithSourceKit(file)
+            let fileFindings = analyzeFileWithRuleBuilder(file, rules: rules)
             findings.append(contentsOf: fileFindings)
 
             if let lineCount = try? String(contentsOf: file, encoding: .utf8).components(separatedBy: .newlines).count {
                 totalLines += lineCount
             }
 
-            if index % 50 == 0 {
+            if index % 50 == 0 && index > 0 {
                 print("📖 Processed \(index)/\(fileCount) files...")
             }
         }
@@ -99,7 +103,7 @@ struct SourceKitAnalyzer {
         )
     }
 
-    private func analyzeFileWithSourceKit(_ url: URL) -> [ArchitecturalFinding] {
+    private func analyzeFileWithRuleBuilder(_ url: URL, rules: [Any]) -> [ArchitecturalFinding] {
         var findings: [ArchitecturalFinding] = []
 
         do {
@@ -115,9 +119,34 @@ struct SourceKitAnalyzer {
             // Extract semantic information
             let declarations = extractDeclarations(from: structure.dictionary)
 
-            // Apply architectural rules
+            // Create analyzed code object for rule processing
+            let analyzedCode = AnalyzedCode(
+                sourceCode: sourceCode,
+                declarations: declarations,
+                lines: lines
+            )
 
-            // Rule 1: File size analysis
+            // Apply all registered rules
+            for rule in rules {
+                if let simpleRule = rule as? SimpleRule {
+                    if let ruleFindings = simpleRule.apply(
+                        to: analyzedCode,
+                        fileName: fileName,
+                        filePath: filePath,
+                        lines: lines
+                    ) {
+                        findings.append(contentsOf: ruleFindings)
+                    }
+                } else if let arrayRule = rule as? ArrayRule<Any> {
+                    // This is a workaround for generic array rules
+                    // In practice, you'd want better handling here
+                    if let ruleFindings = applyArrayRule(arrayRule, to: analyzedCode, fileName: fileName, filePath: filePath, lines: lines) {
+                        findings.append(contentsOf: ruleFindings)
+                    }
+                }
+            }
+
+            // Apply built-in file size rule
             if lines > 150 {
                 findings.append(ArchitecturalFinding(
                     fileName: fileName,
@@ -131,79 +160,6 @@ struct SourceKitAnalyzer {
                     automationConfidence: 0.85,
                     recommendedAction: "Extract smaller components from large file",
                     type: "large_file"
-                ))
-            }
-
-            // Rule 2: TCA State struct analysis
-            let stateStructs = declarations.filter {
-                $0.kind.contains("struct") && $0.name.contains("State")
-            }
-
-            for stateStruct in stateStructs {
-                let propertyCount = countProperties(in: declarations, structDeclaration: stateStruct)
-
-                if propertyCount > 15 {
-                    findings.append(ArchitecturalFinding(
-                        fileName: fileName,
-                        filePath: filePath,
-                        ruleName: "TCA Monolithic State",
-                        severity: .high,
-                        lines: lines,
-                        actualValue: "\(propertyCount) state properties",
-                        expectedValue: "< 15 properties",
-                        hasViolation: true,
-                        automationConfidence: 0.90,
-                        recommendedAction: "Extract related properties into focused child features",
-                        type: "monolithic_state"
-                    ))
-                }
-            }
-
-            // Rule 3: TCA Action enum analysis
-            let actionEnums = declarations.filter {
-                $0.kind.contains("enum") && $0.name.contains("Action")
-            }
-
-            for actionEnum in actionEnums {
-                let caseCount = countEnumCases(in: declarations, enumDeclaration: actionEnum)
-
-                if caseCount > 40 {
-                    findings.append(ArchitecturalFinding(
-                        fileName: fileName,
-                        filePath: filePath,
-                        ruleName: "TCA Monolithic Actions",
-                        severity: .high,
-                        lines: lines,
-                        actualValue: "\(caseCount) action cases",
-                        expectedValue: "< 40 cases",
-                        hasViolation: true,
-                        automationConfidence: 0.85,
-                        recommendedAction: "Decompose into multiple child features with delegated actions",
-                        type: "monolithic_actions"
-                    ))
-                }
-            }
-
-            // Rule 4: Async error handling analysis
-            let hasAsync = sourceCode.contains("async") || sourceCode.contains("await")
-            let hasErrorHandling = sourceCode.contains("throws") ||
-                                 sourceCode.contains("catch") ||
-                                 sourceCode.contains("Result<") ||
-                                 sourceCode.lowercased().contains("error")
-
-            if hasAsync && !hasErrorHandling {
-                findings.append(ArchitecturalFinding(
-                    fileName: fileName,
-                    filePath: filePath,
-                    ruleName: "Async Error Handling",
-                    severity: .critical,
-                    lines: lines,
-                    actualValue: "Async operations without error handling",
-                    expectedValue: "Proper error handling for async operations",
-                    hasViolation: true,
-                    automationConfidence: 0.95,
-                    recommendedAction: "Add throws/catch or Result types for async operations",
-                    type: "async_error_handling"
                 ))
             }
 
@@ -224,6 +180,12 @@ struct SourceKitAnalyzer {
         }
 
         return findings
+    }
+
+    // Helper method to handle generic array rules
+    private func applyArrayRule<T>(_ rule: ArrayRule<T>, to code: AnalyzedCode, fileName: String, filePath: String, lines: Int) -> [ArchitecturalFinding]? {
+        // This is a simplified approach - in practice you'd want better type safety
+        return rule.apply(to: code, fileName: fileName, filePath: filePath, lines: lines)
     }
 
     private func extractDeclarations(from dict: [String: Any]) -> [DeclarationInfo] {
@@ -266,30 +228,6 @@ struct SourceKitAnalyzer {
             "source.lang.swift.decl.enumcase"
         ]
         return swiftDeclarations.contains(kind)
-    }
-
-    private func countProperties(in declarations: [DeclarationInfo], structDeclaration: DeclarationInfo) -> Int {
-        guard let structStart = structDeclaration.bodyOffset,
-              let structBodyLength = structDeclaration.bodyLength else { return 0 }
-
-        let structEnd = structStart + structBodyLength
-
-        return declarations.filter {
-            $0.kind.contains("var.instance") &&
-            $0.offset >= structStart && $0.offset < structEnd
-        }.count
-    }
-
-    private func countEnumCases(in declarations: [DeclarationInfo], enumDeclaration: DeclarationInfo) -> Int {
-        guard let enumStart = enumDeclaration.bodyOffset,
-              let enumBodyLength = enumDeclaration.bodyLength else { return 0 }
-
-        let enumEnd = enumStart + enumBodyLength
-
-        return declarations.filter {
-            $0.kind.contains("enumcase") &&
-            $0.offset >= enumStart && $0.offset < enumEnd
-        }.count
     }
 
     private func findSwiftFiles(at path: String) -> [URL] {
@@ -345,7 +283,15 @@ struct SourceKitAnalyzer {
         if violations.isEmpty {
             recommendations.append("✅ Excellent architectural quality maintained")
         } else {
-            recommendations.append("🔧 Address violations systematically using SourceKit semantic analysis")
+            recommendations.append("🔧 Address violations systematically using human-friendly rule analysis")
+        }
+
+        // Add specific rule-based recommendations
+        let ruleGroups = Dictionary(grouping: violations) { $0.ruleName }
+        for (ruleName, ruleViolations) in ruleGroups.sorted(by: { $0.key < $1.key }) {
+            if ruleViolations.count >= 3 {
+                recommendations.append("📋 \(ruleName): \(ruleViolations.count) violations detected")
+            }
         }
 
         return recommendations
@@ -372,7 +318,7 @@ struct AIValidationResult: Codable {
     let recommendations: [String]
 
     init(timestamp: String, projectPath: String, summary: Summary, findings: [ArchitecturalFinding], recommendations: [String]) {
-        self.analysisType = "smith-validation-sourcekit-analysis"
+        self.analysisType = "smith-validation-rule-builder-analysis"
         self.timestamp = timestamp
         self.projectPath = projectPath
         self.summary = summary
