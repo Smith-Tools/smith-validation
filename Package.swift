@@ -18,12 +18,14 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // No dependencies - using Foundation only for maximum performance
+        .package(url: "https://github.com/jpsim/SourceKitten.git", from: "0.34.1")
     ],
     targets: [
         .executableTarget(
             name: "smith-validation",
-            dependencies: [],
+            dependencies: [
+                .product(name: "SourceKittenFramework", package: "SourceKitten")
+            ],
             path: "Sources/smith-validation"
         ),
     ]
