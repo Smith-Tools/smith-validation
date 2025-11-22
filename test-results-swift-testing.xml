@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites>
-  <testsuite name="TestResults" errors="0" tests="4" failures="0" skipped="0" time="0.024298">
-    <testcase classname="EngineTests.FileBasedRuleEngineTests" name="testFileBasedRuleEngineAnalyzesFiles()" time="0.018511958" />
-    <testcase classname="EngineTests.FileBasedRuleEngineTests" name="testFileBasedRuleEngineLoadsRules()" time="0.014663" />
-    <testcase classname="EngineTests.FileBasedRuleEngineTests" name="testFileBasedRuleEngineReloadsRules()" time="0.023996667" />
-    <testcase classname="EngineTests.FileBasedRuleEngineTests" name="testFileBasedRuleEngineHandlesCompilationErrors()" time="0.016470625" />
-  </testsuite>
-</testsuites>
