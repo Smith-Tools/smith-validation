@@ -1,560 +1,468 @@
+// Sources/smith-validation/main.swift
+// Lightweight SwiftSyntax-free CLI with AI-optimized JSON output
+
 import Foundation
-import SmithValidation
-import SmithValidationCore
-import MaxwellsTCARules
-import GeneratedConfig
 
-/// Marker prefix used by rule-pack tests to emit findings.
-private let findingMarker = "SMITH_RULE_FINDING:"
-private let projectEnvKey = "SMITH_RULES_PROJECT_ROOT"
-private let includeEnvKey = "SMITH_RULES_INCLUDE"
-private let excludeEnvKey = "SMITH_RULES_EXCLUDE"
-
+/// Simple CLI interface for AI agents - NO SwiftSyntax dependency!
 @main
 struct SmithValidationCLI {
     static func main() async {
-        let opts = CLIOptions.parse(CommandLine.arguments.dropFirst())
+        let args = CommandLine.arguments
 
-        if opts.showVersion {
-            print("smith-validation \(versionString())")
+        guard args.count == 2 else {
+            print(jsonError("Usage: smith-validation <project-path>"))
             return
         }
 
-        if let rulesPack = opts.rulesTestsPath {
-            guard let target = opts.paths.first else {
-                print("❌ Please provide a target project path as the first positional argument when using --rules-tests.")
-                exit(1)
-            }
-            switch runRulesTests(packPath: rulesPack, targetPath: target, include: opts.includeGlobs, exclude: opts.excludeGlobs) {
-            case .success(let violations):
-                generateArchitecturalReport(
-                    violationsCollections: [("Custom Rule Pack", ViolationCollection(violations: violations))],
-                    totalFiles: violations.map { _ in 0 }.count,
-                    parsedFiles: violations.map { _ in 0 }.count
-                )
-                exit(violations.isEmpty ? 0 : 2)
-            case .failure(let error):
-                print("❌ rules-tests failed: \(error.localizedDescription)")
-                exit(1)
-            }
-        }
+        let projectPath = args[1]
+        let projectURL = URL(fileURLWithPath: projectPath)
 
-        // Artifact mode (fastest - uses build artifacts)
-        if opts.artifacts {
-            runArtifactMode(opts: opts)
+        // Validate project exists
+        guard FileManager.default.fileExists(atPath: projectPath) else {
+            print(jsonError("Project path does not exist: \(projectPath)"))
             return
         }
 
-        // Engine mode is the default when a path is provided
-        if !opts.paths.isEmpty || opts.engine {
-            await runEngineMode(opts: opts)
-            return
-        }
+        // Run lightweight architectural analysis
+        let result = await runLightweightAnalysis(projectURL: projectURL)
 
-        // Help
-        print("""
-        smith-validation \(versionString())
-        Usage:
-          smith-validation [--engine] [--config <path>] <path>      Run built-in engine with bundled rules
-          smith-validation --artifacts <path>                     Use build artifacts for fast validation
-          smith-validation --rules-tests <rule-pack> <path>        Run a Swift Testing rule pack dynamically
-
-        Options:
-          --config, -c         PKL configuration file path (default: SMITH_VALIDATION_CONFIG env var)
-          --include globs       Comma-separated include globs (default: **/*.swift)
-          --exclude globs       Comma-separated exclude globs (default: **/DerivedData/**,**/.build/**,**/Pods/**,**/.swiftpm/**)
-          --artifacts, -a       Use build artifacts mode (fastest for large codebases)
-          --engine, -e          Force engine mode (default for paths)
-          --version, -v         Print version
-        """)
+        // Output AI-optimized JSON
+        print(result.asJSON())
     }
 
-    // MARK: - Artifact mode (fastest - uses build artifacts)
-    private static func runArtifactMode(opts: CLIOptions) {
-        do {
-            print("=== smith-validation (artifact mode) ===")
-            print("🚀 Using build artifacts for ultra-fast validation")
+    private static func runLightweightAnalysis(projectURL: URL) async -> AIValidationResult {
+        let startTime = Date()
 
-            var allViolations: [ArchitecturalViolation] = []
-            var totalFiles = 0
-            var parsedFiles = 0
+        // Find Swift files using file system only
+        let swiftFiles = findSwiftFiles(in: projectURL)
 
-            for path in opts.paths {
-                let artifacts = try loadBuildArtifacts(from: path)
-                let violations = try validateArtifacts(artifacts: artifacts)
+        // Analyze files using regex patterns (NO SwiftSyntax!)
+        let findings = analyzeFiles(swiftFiles)
 
-                allViolations.append(contentsOf: violations.violations)
-                totalFiles += artifacts.swiftFiles.count
-                parsedFiles += artifacts.swiftFiles.count
-            }
+        let duration = Date().timeIntervalSince(startTime)
 
-            let collection = ViolationCollection(violations: allViolations)
-            generateArchitecturalReport(
-                violationsCollections: [("Maxwells TCA Pack (Artifacts)", collection)],
-                totalFiles: totalFiles,
-                parsedFiles: parsedFiles
-            )
-        } catch {
-            print("❌ Artifact mode failed: \(error.localizedDescription)")
-            print("💡 Ensure the project has been built (swift build) and artifacts are available")
-        }
-    }
-
-    // MARK: - Hybrid Engine mode
-    private static func runEngineMode(opts: CLIOptions) async {
-        print("=== smith-validation (hybrid engine mode) ===")
-
-        // Use Hybrid Engine for efficient, structured validation
-        for path in opts.paths {
-            let report = await HybridEngine.validate(
-                directory: URL(fileURLWithPath: path),
-                rulePacks: ["TCA", "SwiftUI", "General"]
-            )
-
-            // Print the beautifully formatted report
-            print(report.generateReport())
-        }
-    }
-
-    // MARK: - Rules test runner
-    private static func runRulesTests(
-        packPath: String,
-        targetPath: String,
-        include: [String],
-        exclude: [String]
-    ) -> Result<[ArchitecturalViolation], Error> {
-        var env = ProcessInfo.processInfo.environment
-        env[projectEnvKey] = URL(fileURLWithPath: targetPath).path
-        env[includeEnvKey] = include.joined(separator: ",")
-        env[excludeEnvKey] = exclude.joined(separator: ",")
-
-        let process = Process()
-        process.environment = env
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        // First try to reuse an existing build to avoid costly rebuilds.
-        let args = ["swift", "test", "-c", "release", "--package-path", packPath, "--disable-sandbox", "--skip-build"]
-        process.arguments = args
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        do { try process.run() } catch { return .failure(error) }
-        process.waitUntilExit()
-
-        let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: outputData, encoding: .utf8) ?? ""
-        let findings = output
-            .split(separator: "\n")
-            .compactMap { line -> ArchitecturalViolation? in
-                guard line.hasPrefix(findingMarker) else { return nil }
-                let jsonPart = line.dropFirst(findingMarker.count)
-                guard let data = String(jsonPart).data(using: .utf8) else { return nil }
-                do {
-                    let finding = try JSONDecoder().decode(TestFinding.self, from: data)
-                    return finding.toViolation()
-                } catch {
-                    return nil
-                }
-            }
-
-        if process.terminationStatus != 0 {
-            // If skip-build failed (likely because nothing is built), retry with a full build once.
-            if args.contains("--skip-build") {
-                let fallback = Process()
-                fallback.environment = env
-                fallback.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                fallback.arguments = ["swift", "test", "-c", "release", "--package-path", packPath, "--disable-sandbox"]
-                let fbPipe = Pipe()
-                fallback.standardOutput = fbPipe
-                fallback.standardError = fbPipe
-                do { try fallback.run() } catch { return .failure(error) }
-                fallback.waitUntilExit()
-                let fbOut = String(data: fbPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let fbFindings = fbOut
-                    .split(separator: "\n")
-                    .compactMap { line -> ArchitecturalViolation? in
-                        guard line.hasPrefix(findingMarker) else { return nil }
-                        let jsonPart = line.dropFirst(findingMarker.count)
-                        guard let data = String(jsonPart).data(using: .utf8) else { return nil }
-                        return try? JSONDecoder().decode(TestFinding.self, from: data).toViolation()
-                    }
-                if fallback.terminationStatus != 0 && fbFindings.isEmpty {
-                    let err = NSError(domain: "smith-validation.rules-tests", code: Int(fallback.terminationStatus), userInfo: [NSLocalizedDescriptionKey: fbOut])
-                    return .failure(err)
-                }
-                return .success(fbFindings)
-            }
-            let err = NSError(domain: "smith-validation.rules-tests", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: output])
-            return .failure(err)
-        }
-        return .success(findings)
-    }
-
-    // MARK: - Artifact Mode Helpers
-
-    /// Build artifacts containing parsed Swift information
-    private struct BuildArtifacts {
-        let swiftFiles: [SwiftFileInfo]
-        let buildPath: String
-    }
-
-    /// Information about a Swift file extracted from build artifacts
-    private struct SwiftFileInfo {
-        let path: String
-        let content: String
-        let stateStructs: [TCAStateInfo]
-        let actionEnums: [TCAActionInfo]
-    }
-
-    /// TCA State struct information
-    private struct TCAStateInfo {
-        let name: String
-        let propertyCount: Int
-        let line: Int
-    }
-
-    /// TCA Action enum information
-    private struct TCAActionInfo {
-        let name: String
-        let caseCount: Int
-        let line: Int
-    }
-
-    /// Load build artifacts from a Swift package or Xcode project
-    private static func loadBuildArtifacts(from path: String) throws -> BuildArtifacts {
-        let url = URL(fileURLWithPath: path)
-
-        // Find build directory
-        let buildPath = try findBuildDirectory(for: url)
-
-        // Extract Swift file information from build artifacts
-        let swiftFiles = try extractSwiftFileInfo(from: url, buildPath: buildPath)
-
-        return BuildArtifacts(
-            swiftFiles: swiftFiles,
-            buildPath: buildPath
+        // Convert to AI-usable format
+        return AIValidationResult(
+            projectPath: projectURL.path,
+            totalFiles: swiftFiles.count,
+            findings: findings,
+            duration: duration
         )
     }
 
-    /// Find the build directory for a project
-    private static func findBuildDirectory(for projectURL: URL) throws -> String {
-        // Check for Swift Package Manager build directory
-        let spmBuildPath = projectURL.appendingPathComponent(".build").path
-        if FileManager.default.fileExists(atPath: spmBuildPath) {
-            return spmBuildPath
+    /// Find Swift files using file system operations
+    private static func findSwiftFiles(in directory: URL) -> [URL] {
+        var swiftFiles: [URL] = []
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return swiftFiles
         }
 
-        // Check for Xcode derived data
-        let derivedDataPaths = [
-            (("~" as NSString).appendingPathComponent("Library/Developer/Xcode/DerivedData") as String),
-            "/var/folders/*/D/Build/*/DerivedData"
-        ]
-
-        for pattern in derivedDataPaths {
-            // Simple glob expansion (real implementation would be more robust)
-            if FileManager.default.fileExists(atPath: pattern) {
-                return pattern
+        for case let fileURL as URL in enumerator {
+            if fileURL.pathExtension == "swift" {
+                swiftFiles.append(fileURL)
             }
         }
 
-        throw ValidationError(message: "No build artifacts found. Please build the project first.")
+        return swiftFiles
     }
 
-    /// Extract Swift file information from build artifacts
-    private static func extractSwiftFileInfo(from projectURL: URL, buildPath: String) throws -> [SwiftFileInfo] {
-        let swiftFiles = try FileUtils.findSwiftFiles(in: projectURL)
-        var fileInfos: [SwiftFileInfo] = []
+    /// Analyze Swift files using regex patterns - FAST and lightweight
+    private static func analyzeFiles(_ files: [URL]) -> [ArchitecturalFinding] {
+        var findings: [ArchitecturalFinding] = []
 
-        for fileURL in swiftFiles {
-            let content = try String(contentsOf: fileURL)
-            let swiftFileInfo = analyzeSwiftFile(
-                path: fileURL.path,
-                content: content
-            )
-            fileInfos.append(swiftFileInfo)
+        for file in files {
+            do {
+                let content = try String(contentsOf: file)
+                let fileFindings = analyzeFile(content: content, file: file)
+                findings.append(contentsOf: fileFindings)
+            } catch {
+                // Skip files that can't be read
+            }
         }
 
-        return fileInfos
+        return findings
     }
 
-    /// Analyze a Swift file for TCA patterns without full parsing
-    private static func analyzeSwiftFile(path: String, content: String) -> SwiftFileInfo {
+    /// Fast regex-based file analysis
+    private static func analyzeFile(content: String, file: URL) -> [ArchitecturalFinding] {
+        var findings: [ArchitecturalFinding] = []
         let lines = content.components(separatedBy: .newlines)
-        var stateStructs: [TCAStateInfo] = []
-        var actionEnums: [TCAActionInfo] = []
 
-        var currentStructLine = 0
-        var inStruct = false
-        var currentStructName = ""
-        var braceLevel = 0
+        // Rule 1: TCA Error Handling Analysis
+        findings.append(contentsOf: analyzeTCAErrorHandling(content: content, file: file, lines: lines))
 
-        var currentEnumLine = 0
-        var inEnum = false
-        var currentEnumName = ""
+        // Rule 2: Monolithic Features Analysis
+        findings.append(contentsOf: analyzeMonolithicFeatures(content: content, file: file, lines: lines))
 
-        for (lineIndex, line) in lines.enumerated() {
-            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+        // Rule 3: SwiftUI View Analysis
+        findings.append(contentsOf: analyzeSwiftUIViews(content: content, file: file, lines: lines))
 
-            // Simple pattern matching for TCA State structs
-            if trimmedLine.hasPrefix("struct") && (trimmedLine.contains("State") || trimmedLine.contains("ObservableState")) {
-                inStruct = true
-                currentStructLine = lineIndex + 1
-                let components = trimmedLine.components(separatedBy: .whitespaces)
-                if components.count > 1 {
-                    currentStructName = components[1].replacingOccurrences(of: ":", with: "")
-                }
-                braceLevel = 0
-                continue
+        // Rule 4: General Architecture Analysis
+        findings.append(contentsOf: analyzeGeneralArchitecture(content: content, file: file, lines: lines))
+
+        return findings
+    }
+
+    /// TCA Error Handling Analysis - FAST regex pattern matching
+    private static func analyzeTCAErrorHandling(content: String, file: URL, lines: [String]) -> [ArchitecturalFinding] {
+        var findings: [ArchitecturalFinding] = []
+
+        // Find Action enums
+        let actionEnumPattern = #"(?s)enum\s+(?:Action|Actions)\s*\{.*?\}"#
+        let actionEnumRegex = try? NSRegularExpression(pattern: actionEnumPattern, options: [])
+
+        let actionEnumMatches = actionEnumRegex?.matches(in: content, range: NSRange(content.startIndex..., in: content))
+
+        for match in actionEnumMatches ?? [] {
+            guard let range = Range(match.range, in: content) else { continue }
+
+            let actionEnumContent = String(content[range])
+            let lineNumber = content.prefix(upTo: range.lowerBound).components(separatedBy: .newlines).count
+
+            // Check for error handling patterns
+            let hasErrorHandling = actionEnumContent.contains("case.*error") ||
+                                  actionEnumContent.contains("case.*failure") ||
+                                  actionEnumContent.contains("case.*failed")
+
+            if !hasErrorHandling {
+                findings.append(ArchitecturalFinding(
+                    ruleName: "TCA-Error-Handling",
+                    severity: .critical,
+                    file: file.path,
+                    line: lineNumber,
+                    message: "Action enum lacks error handling cases",
+                    suggestion: "Add error-related action cases like 'errorOccurred(String)' or 'loadFailed(Error)' to handle async operation failures",
+                    automationConfidence: 0.88
+                ))
             }
+        }
 
-            // Simple pattern matching for TCA Action enums
-            if trimmedLine.hasPrefix("enum") && trimmedLine.contains("Action") {
-                inEnum = true
-                currentEnumLine = lineIndex + 1
-                let components = trimmedLine.components(separatedBy: .whitespaces)
-                if components.count > 1 {
-                    currentEnumName = components[1].replacingOccurrences(of: ":", with: "")
-                }
-                braceLevel = 0
-                continue
-            }
+        return findings
+    }
 
-            if inStruct {
-                // Count properties in struct
-                for char in line {
-                    if char == "{" { braceLevel += 1 }
-                    else if char == "}" { braceLevel -= 1 }
-                }
+    /// Monolithic Features Analysis - FAST counting
+    private static func analyzeMonolithicFeatures(content: String, file: URL, lines: [String]) -> [ArchitecturalFinding] {
+        var findings: [ArchitecturalFinding] = []
 
-                // Simple property detection (lines with ':' inside struct)
-                if trimmedLine.contains(":") && !trimmedLine.hasPrefix("//") && braceLevel == 1 {
-                    // Count as a property
-                }
+        // Find State structs with too many properties
+        for (index, line) in lines.enumerated() {
+            if line.contains("struct") && line.contains("State") {
+                let structStartIndex = index
+                var propertyCount = 0
+                var braceCount = 0
+                var inStruct = false
 
-                if braceLevel <= 0 {
-                    // Struct ended, calculate property count
-                    let structContent = lines[(currentStructLine - 1)...lineIndex].joined()
-                    let propertyCount = countPropertiesInContent(structContent)
-
-                    if propertyCount > 0 {
-                        stateStructs.append(TCAStateInfo(
-                            name: currentStructName,
-                            propertyCount: propertyCount,
-                            line: currentStructLine
-                        ))
+                // Simple state counting - no SwiftSyntax needed
+                for structLine in lines.dropFirst(structStartIndex) {
+                    if structLine.contains("{") {
+                        braceCount += 1
+                        inStruct = true
+                    } else if structLine.contains("}") {
+                        braceCount -= 1
+                        if braceCount == 0 {
+                            break
+                        }
+                    } else if inStruct && (structLine.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("var ") ||
+                                   structLine.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("let ")) {
+                        propertyCount += 1
                     }
-
-                    inStruct = false
-                }
-            }
-
-            if inEnum {
-                // Count enum cases
-                if trimmedLine.hasPrefix("case") {
-                    // Simple case detection
                 }
 
-                for char in line {
-                    if char == "{" { braceLevel += 1 }
-                    else if char == "}" { braceLevel -= 1 }
-                }
-
-                if braceLevel <= 0 {
-                    // Enum ended, calculate case count
-                    let enumContent = lines[(currentEnumLine - 1)...lineIndex].joined()
-                    let caseCount = countCasesInContent(enumContent)
-
-                    if caseCount > 0 {
-                        actionEnums.append(TCAActionInfo(
-                            name: currentEnumName,
-                            caseCount: caseCount,
-                            line: currentEnumLine
-                        ))
-                    }
-
-                    inEnum = false
-                }
-            }
-        }
-
-        return SwiftFileInfo(
-            path: path,
-            content: content,
-            stateStructs: stateStructs,
-            actionEnums: actionEnums
-        )
-    }
-
-    /// Count properties in struct content (simplified)
-    private static func countPropertiesInContent(_ content: String) -> Int {
-        let lines = content.components(separatedBy: .newlines)
-        var count = 0
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // Simple heuristic for properties (contains : but not "case", "func", etc.)
-            if trimmed.contains(":") &&
-               !trimmed.hasPrefix("case") &&
-               !trimmed.hasPrefix("func") &&
-               !trimmed.hasPrefix("init") &&
-               !trimmed.hasPrefix("//") &&
-               !trimmed.contains("->") {
-                count += 1
-            }
-        }
-
-        return count
-    }
-
-    /// Count enum cases in content (simplified)
-    private static func countCasesInContent(_ content: String) -> Int {
-        let lines = content.components(separatedBy: .newlines)
-        var count = 0
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("case") {
-                count += 1
-            }
-        }
-
-        return count
-    }
-
-    /// Validate artifacts and generate violations
-    private static func validateArtifacts(artifacts: BuildArtifacts) throws -> ViolationCollection {
-        var violations: [ArchitecturalViolation] = []
-
-        for fileInfo in artifacts.swiftFiles {
-            // Rule 1.1: Monolithic Features - State structs
-            for stateInfo in fileInfo.stateStructs {
-                if stateInfo.propertyCount > 15 {
-                    violations.append(.high(
-                        rule: "TCA Rule 1.1: Monolithic Features",
-                        file: fileInfo.path,
-                        line: stateInfo.line,
-                        message: "State struct '\(stateInfo.name)' has \(stateInfo.propertyCount) properties (>15 threshold) - consider splitting into multiple features",
-                        recommendation: "Split this monolithic State into smaller, focused feature states"
+                if propertyCount > 15 {
+                    findings.append(ArchitecturalFinding(
+                        ruleName: "TCA-Monolithic-Features",
+                        severity: .high,
+                        file: file.path,
+                        line: index + 1,
+                        message: "State struct has \(propertyCount) properties (threshold: 15)",
+                        suggestion: "Consider extracting separate features. State structs should ideally have <15 properties.",
+                        automationConfidence: 0.75
                     ))
                 }
             }
 
-            // Rule 1.1: Monolithic Features - Action enums
-            for actionInfo in fileInfo.actionEnums {
-                if actionInfo.caseCount > 40 {
-                    violations.append(.high(
-                        rule: "TCA Rule 1.1: Monolithic Features",
-                        file: fileInfo.path,
-                        line: actionInfo.line,
-                        message: "Action enum '\(actionInfo.name)' has \(actionInfo.caseCount) cases (>40 threshold) - suggests too much responsibility",
-                        recommendation: "Break down this feature into smaller, focused features with fewer actions"
+            // Find Action enums with too many cases
+            if line.contains("enum") && line.contains("Action") {
+                let enumStartIndex = index
+                var caseCount = 0
+                var braceCount = 0
+                var inEnum = false
+
+                for enumLine in lines.dropFirst(enumStartIndex) {
+                    if enumLine.contains("{") {
+                        braceCount += 1
+                        inEnum = true
+                    } else if enumLine.contains("}") {
+                        braceCount -= 1
+                        if braceCount == 0 {
+                            break
+                        }
+                    } else if inEnum && enumLine.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("case ") {
+                        caseCount += 1
+                    }
+                }
+
+                if caseCount > 40 {
+                    findings.append(ArchitecturalFinding(
+                        ruleName: "TCA-Monolithic-Features",
+                        severity: .high,
+                        file: file.path,
+                        line: index + 1,
+                        message: "Action enum has \(caseCount) cases (threshold: 40)",
+                        suggestion: "Consider splitting into multiple features. Action enums should ideally have <40 cases.",
+                        automationConfidence: 0.70
                     ))
                 }
             }
         }
 
-        return ViolationCollection(violations: violations)
+        return findings
     }
 
-    // MARK: - Helpers
+    /// SwiftUI View Analysis
+    private static func analyzeSwiftUIViews(content: String, file: URL, lines: [String]) -> [ArchitecturalFinding] {
+        var findings: [ArchitecturalFinding] = []
 
-    private static func versionString() -> String { "v1.0.10" }
+        for (index, line) in lines.enumerated() {
+            // Find View structs with complex body
+            if line.contains("struct") && (line.contains("View") || file.lastPathComponent.contains("View")) {
+                let viewStartIndex = index
+                var bodyLineCount = 0
+                var inViewBody = false
 
-    private static func loadPKLConfig(at path: String) async -> SmithValidationConfig.Module? {
-        // PKL integration temporarily disabled
-        return nil
-    }
+                for viewLine in lines.dropFirst(viewStartIndex) {
+                    if viewLine.contains("var body:") {
+                        inViewBody = true
+                        continue
+                    }
 
-    private static func generateArchitecturalReport(
-        violationsCollections: [(rule: String, violations: ViolationCollection)],
-        totalFiles: Int = 0,
-        parsedFiles: Int = 0
-    ) {
-        print("""
-        ╔══════════════════════════════════════════════════════════════════════════════╗
-        ║                    🧠 SMITH VALIDATION - ARCHITECTURAL REPORT                 ║
-        ╚══════════════════════════════════════════════════════════════════════════════╝
+                    if inViewBody {
+                        bodyLineCount += 1
 
-        📊 VALIDATION SUMMARY
-           Files Scanned: \(totalFiles)
-           Files Parsed: \(parsedFiles)
-        """)
+                        // Count until we hit the next property or end of struct
+                        if viewLine.contains("var ") || viewLine.contains("func ") || viewLine.contains("}") {
+                            break
+                        }
+                    }
+                }
 
-        let totalViolations = violationsCollections.flatMap { $0.violations.violations }
-        let healthScore = totalFiles > 0 ? max(0, 100 - (totalViolations.count * 5)) : 100
-
-        print("""
-           Health Score: \(healthScore)%
-
-        \(totalViolations.isEmpty ? "✅ NO VIOLATIONS DETECTED - Excellent architectural health!" : "⚠️  \(totalViolations.count) VIOLATIONS DETECTED - Review recommended")
-        """)
-
-        if !totalViolations.isEmpty {
-            print("\n📋 VIOLATION BREAKDOWN:")
-            for (index, collection) in violationsCollections.enumerated() where collection.violations.count > 0 {
-                let ruleNumber = index + 1
-                let ruleName = collection.rule
-                print("\n\(ruleNumber). \(ruleName)")
-                print("─" + String(repeating: "─", count: ruleName.count))
-                for violation in collection.violations.violations {
-                    print("   • \(violation.file):\(violation.line)")
-                    print("     \(violation.message)")
-                    if let rec = violation.recommendation { print("     💡 \(rec)") }
+                if bodyLineCount > 50 {
+                    findings.append(ArchitecturalFinding(
+                        ruleName: "SwiftUI-View-Complexity",
+                        severity: .medium,
+                        file: file.path,
+                        line: index + 1,
+                        message: "View body has \(bodyLineCount) lines (threshold: 50)",
+                        suggestion: "Extract complex UI components into separate views to improve maintainability.",
+                        automationConfidence: 0.65
+                    ))
                 }
             }
         }
 
-        print("""
-        ────────────────────────────────────────────────────────────────────────────────
-        🤖 Generated by smith-validation
-        """)
+        return findings
+    }
+
+    /// General Architecture Analysis
+    private static func analyzeGeneralArchitecture(content: String, file: URL, lines: [String]) -> [ArchitecturalFinding] {
+        var findings: [ArchitecturalFinding] = []
+
+        // Simple pattern analysis for common issues
+        let linesWithImports = lines.filter { $0.hasPrefix("import ") }
+
+        // Too many imports might indicate high coupling
+        if linesWithImports.count > 15 {
+            findings.append(ArchitecturalFinding(
+                ruleName: "General-High-Coupling",
+                severity: .medium,
+                file: file.path,
+                line: 1,
+                message: "File has \(linesWithImports.count) imports (threshold: 15)",
+                suggestion: "Consider reducing dependencies or using dependency injection to lower coupling.",
+                automationConfidence: 0.60
+            ))
+        }
+
+        return findings
+    }
+
+    private static func jsonError(_ message: String) -> String {
+        return """
+        {
+            "error": "\(message)"
+        }
+        """
     }
 }
 
-// MARK: - Error Types
-private struct ValidationError: LocalizedError {
+// MARK: - AI-Optimized Data Structures
+
+/// AI-usable validation result
+public struct AIValidationResult: Codable {
+    let projectPath: String
+    let metadata: Metadata
+    let summary: Summary
+    let priorityActions: [PriorityAction]
+    let decisionMetrics: DecisionMetrics
+
+    init(projectPath: String, totalFiles: Int, findings: [ArchitecturalFinding], duration: TimeInterval) {
+        self.projectPath = projectPath
+        self.metadata = Metadata(
+            version: "1.0.10",
+            timestamp: Date(),
+            filesAnalyzed: totalFiles,
+            duration: duration
+        )
+
+        self.summary = Summary(
+            healthScore: calculateHealthScore(findings),
+            violationsCount: findings.count,
+            criticalIssues: findings.filter { $0.severity == .critical }.count,
+            automatableFixes: findings.filter { $0.automationConfidence > 0.8 }.count
+        )
+
+        let criticalAndHigh = findings.filter {
+            $0.severity == .critical || $0.severity == .high
+        }
+        self.priorityActions = criticalAndHigh.map { PriorityAction(from: $0) }
+            .sorted { $0.automationConfidence > $1.automationConfidence }
+
+        self.decisionMetrics = DecisionMetrics(
+            refactoringROI: calculateROI(findings),
+            techDebtScore: calculateTechDebt(findings),
+            blockingCriticalCount: findings.filter { $0.severity == .critical }.count
+        )
+    }
+
+    /// Export as JSON for AI consumption
+    public func asJSON() -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        guard let data = try? encoder.encode(self),
+              let jsonString = String(data: data, encoding: .utf8) else {
+            return """
+            {
+                "error": "Failed to encode results"
+            }
+            """
+        }
+        return jsonString
+    }
+
+    // MARK: - Private Calculations
+
+    private func calculateHealthScore(_ findings: [ArchitecturalFinding]) -> Int {
+        if findings.isEmpty { return 100 }
+        let score = max(0, 100 - (findings.count / 10))
+        return min(score, 100)
+    }
+
+    private func calculateROI(_ findings: [ArchitecturalFinding]) -> Double {
+        let highConfidenceFixes = findings.filter { $0.automationConfidence > 0.8 }
+        guard !findings.isEmpty else { return 0.0 }
+        return Double(highConfidenceFixes.count) / Double(findings.count)
+    }
+
+    private func calculateTechDebt(_ findings: [ArchitecturalFinding]) -> Double {
+        let criticalAndHigh = findings.filter {
+            $0.severity == .critical || $0.severity == .high
+        }
+        guard !findings.isEmpty else { return 0.0 }
+        return Double(criticalAndHigh.count) / Double(findings.count)
+    }
+}
+
+// MARK: - Supporting Types
+
+public struct Metadata: Codable {
+    let version: String
+    let timestamp: Date
+    let filesAnalyzed: Int
+    let duration: TimeInterval
+}
+
+public struct Summary: Codable {
+    let healthScore: Int
+    let violationsCount: Int
+    let criticalIssues: Int
+    let automatableFixes: Int
+}
+
+public struct PriorityAction: Codable {
+    let type: String
+    let severity: String
+    let file: String
+    let line: Int
     let message: String
-    var errorDescription: String? { return message }
-}
+    let recommendedAction: String
+    let automationConfidence: Double
+    let blocking: Bool
 
-// MARK: - CLI options
-fileprivate struct CLIOptions {
-    var paths: [String] = []
-    var engine: Bool = false
-    var artifacts: Bool = false
-    var rulesTestsPath: String?
-    var includeGlobs: [String] = ["**/*.swift"]
-    var excludeGlobs: [String] = ["**/DerivedData/**", "**/.build/**", "**/Pods/**", "**/.swiftpm/**", "**/ThirdParty/**", "**/Vendor/**", "**/External/**"]
-    var showVersion: Bool = false
-    var configPath: String = ProcessInfo.processInfo.environment["SMITH_VALIDATION_CONFIG"] ?? ""
+    init(from finding: ArchitecturalFinding) {
+        self.type = extractType(from: finding.ruleName)
+        self.severity = severityToString(finding.severity)
+        self.file = finding.file
+        self.line = finding.line
+        self.message = finding.message
+        self.recommendedAction = finding.suggestion
+        self.automationConfidence = finding.automationConfidence
+        self.blocking = finding.severity == .critical
+    }
 
-    static func parse(_ args: ArraySlice<String>) -> CLIOptions {
-        var opts = CLIOptions()
-        var it = args.makeIterator()
-        while let arg = it.next() {
-            switch arg {
-            case "--engine", "-e":
-                opts.engine = true
-            case "--artifacts", "-a":
-                opts.artifacts = true
-            case "--include":
-                if let next = it.next() { opts.includeGlobs = next.split(separator: ",").map(String.init) }
-            case "--exclude":
-                if let next = it.next() { opts.excludeGlobs = next.split(separator: ",").map(String.init) }
-            case "--rules-tests":
-                if let next = it.next() { opts.rulesTestsPath = next }
-            case "--config", "-c":
-                if let next = it.next() { opts.configPath = next }
-            case "--version", "-v":
-                opts.showVersion = true
-            default:
-                if !arg.hasPrefix("-") {
-                    opts.paths.append(arg)
-                }
-            }
+    private func extractType(from ruleName: String) -> String {
+        if ruleName.contains("Monolithic") { return "monolithic_feature" }
+        if ruleName.contains("Error") || ruleName.contains("Handling") { return "missing_error_handling" }
+        if ruleName.contains("View") { return "swiftui_complexity" }
+        if ruleName.contains("Coupling") { return "high_coupling" }
+        return "architectural_violation"
+    }
+
+    private func severityToString(_ severity: ViolationSeverity) -> String {
+        switch severity {
+        case .critical: return "critical"
+        case .high: return "high"
+        case .medium: return "medium"
+        case .low: return "low"
         }
-        return opts
     }
 }
 
+public struct DecisionMetrics: Codable {
+    let refactoringROI: Double
+    let techDebtScore: Double
+    let blockingCriticalCount: Int
+}
+
+public struct ArchitecturalFinding: Codable {
+    let ruleName: String
+    let severity: ViolationSeverity
+    let file: String
+    let line: Int
+    let message: String
+    let suggestion: String
+    let automationConfidence: Double
+}
+
+// MARK: - Lightweight Severity Enum
+
+public enum ViolationSeverity: String, Codable {
+    case critical = "critical"
+    case high = "high"
+    case medium = "medium"
+    case low = "low"
+}
+
+// MARK: - Extensions
+
+extension Array where Element: Hashable {
+    var unique: [Element] {
+        return Array(Set(self))
+    }
+}
