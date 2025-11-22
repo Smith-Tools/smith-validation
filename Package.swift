@@ -13,11 +13,6 @@ let package = Package(
         .visionOS(.v1)
     ],
     products: [
-        // Core framework for architectural analysis
-        .library(
-            name: "SmithValidationCore",
-            targets: ["SmithValidationCore"]
-        ),
         // CLI tool for AI agent integration
         .executable(
             name: "smith-validation",
