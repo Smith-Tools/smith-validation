@@ -13,6 +13,21 @@ let package = Package(
         .visionOS(.v1)
     ],
     products: [
+        // Core validation framework
+        .library(
+            name: "SmithValidationCore",
+            targets: ["SmithValidationCore"]
+        ),
+        // Validation library
+        .library(
+            name: "SmithValidation",
+            targets: ["SmithValidation"]
+        ),
+        // TCA-specific rules
+        .library(
+            name: "MaxwellsTCARules",
+            targets: ["MaxwellsTCARules"]
+        ),
         // CLI tool for AI agent integration
         .executable(
             name: "smith-validation",
@@ -20,15 +35,47 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // NO SwiftSyntax dependency - lightweight regex-based analysis
-        // Swift Testing for architectural rules execution (optional, not used in main CLI)
+        // SwiftSyntax for AST analysis
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
+        // Swift Testing for architectural rules execution
         .package(url: "https://github.com/apple/swift-testing.git", from: "0.10.0"),
+        // PKL for configuration management
+        .package(url: "https://github.com/apple/pkl-swift.git", from: "0.2.0"),
+        // SourceKitten for deep analysis
+        .package(url: "https://github.com/jpsim/SourceKitten.git", from: "0.34.1")
     ],
     targets: [
-        // CLI tool for AI agent integration - NO SwiftSyntax dependency!
+        // Core validation framework
+        .target(
+            name: "SmithValidationCore",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SourceKittenFramework", package: "SourceKitten")
+            ],
+            path: "Sources/SmithValidationCore"
+        ),
+        // High-level validation library
+        .target(
+            name: "SmithValidation",
+            dependencies: [
+                "SmithValidationCore",
+                .product(name: "Testing", package: "swift-testing"),
+                .product(name: "PklSwift", package: "pkl-swift")
+            ],
+            path: "Sources/SmithValidation"
+        ),
+        // TCA-specific rules
+        .target(
+            name: "MaxwellsTCARules",
+            dependencies: [
+                "SmithValidationCore"
+            ],
+            path: "Sources/MaxwellsTCARules"
+        ),
+        // CLI tool (maintaining existing regex-based approach for backward compatibility)
         .executableTarget(
             name: "smith-validation",
-            dependencies: [], // Pure Foundation + Regex - FAST compilation!
+            dependencies: [], // Keep current regex implementation working
             path: "Sources/smith-validation"
         ),
     ]

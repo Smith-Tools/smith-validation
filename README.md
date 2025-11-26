@@ -1,31 +1,30 @@
 # smith-validation
 
-> **AI-Optimized Progressive Intelligence Architectural Analysis for Swift**
+> **CLI-based Swift architectural analysis tool**
 
 [![Release](https://img.shields.io/github/release/Smith-Tools/smith-validation.svg)](https://github.com/Smith-Tools/smith-validation/releases)
 [![Swift](https://img.shields.io/badge/swift-5.9%2B-orange.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-smith-validation is a **Progressive Intelligence architectural analysis engine** for Swift projects. It provides three levels of analysis depth, from critical violations to comprehensive insights, with AI-optimized JSON output perfect for Claude agents and automated workflows.
+smith-validation is a **CLI-based architectural analysis tool** for Swift projects that provides rapid architectural health assessment with JSON output perfect for CI/CD pipelines and automated workflows.
 
-## ✨ Progressive Intelligence Features
+## ✨ Current Features
 
-### 🧠 Three Analysis Levels
-- **Critical**: Only critical + high severity violations (fastest)
-- **Standard**: All architectural violations with smart filtering
-- **Comprehensive**: Standard analysis + pattern insights + architectural hotspots
+### 🎯 CLI-First Analysis
+- **Fast Analysis**: External tool with no compile-time dependencies
+- **JSON Output**: Structured results perfect for automation
+- **Progressive Intelligence**: Three analysis levels (critical, standard, comprehensive)
 
-### 🤖 AI-Optimized JSON Output
-- Structured JSON perfect for Claude agents and automation
-- Progressive recommendations based on analysis level
-- Cross-domain insights for strategic architectural improvements
-- Automation confidence scoring for fix prioritization
+### 🔍 Built-in Validation Rules
 
-### 🎯 Enhanced Architectural Rules
-- **TCA Missing Error Handling**: Detect Action enums without error cases
-- **Monolithic Features**: Identify State structs with >15 properties
-- **High Coupling**: Files with excessive imports (>15)
-- **Architectural Hotspots**: Pattern-based insights for comprehensive refactoring
+#### Critical Rules
+- **TCA Missing Error Handling**: Detects Action enums without error cases
+
+#### High Severity Rules
+- **TCA Monolithic State**: Identifies State structs with >15 properties
+
+#### Medium Severity Rules
+- **High Coupling**: Files with >15 imports
 
 ## 🚀 Quick Start
 
@@ -55,42 +54,33 @@ smith-validation /path/to/project --level=critical
 # Standard analysis (all violations)
 smith-validation /path/to/project --level=standard
 
-# Comprehensive analysis with hotspots
+# Comprehensive analysis with architectural hotspots
 smith-validation /path/to/project --level=comprehensive
 
 # Default is critical level
 smith-validation /path/to/project
 ```
 
-### Usage Examples
+### Example Usage
 
 ```bash
-# Analyze current directory with critical violations
+# Analyze current directory for critical violations
 smith-validation . --level=critical
 
 # Comprehensive analysis of your project
 smith-validation ~/Projects/MyApp --level=comprehensive
-
-# Standard analysis for CI/CD pipelines
-smith-validation . --level=standard
 ```
 
-## 📊 AI-Optimized Output
+## 📊 Output Format
 
-smith-validation produces structured JSON perfect for:
+smith-validation produces structured JSON:
 
-- **Claude Agent Integration**: Direct consumption by AI assistants
-- **Automated Workflows**: CI/CD pipeline integration
-- **Progressive Filtering**: Different analysis depths for different needs
-- **Smart Recommendations**: Context-aware architectural advice
-
-### Example Output (Critical Level)
-
+### Example Output
 ```json
 {
   "analysisType": "smith-validation-progressive-intelligence",
   "analysisLevel": "critical",
-  "timestamp": "2025-11-22T17:59:11Z",
+  "timestamp": "2025-11-26T19:16:00Z",
   "projectPath": "/path/to/project",
   "summary": {
     "totalFiles": 25,
@@ -125,123 +115,31 @@ smith-validation produces structured JSON perfect for:
 }
 ```
 
-## 🎯 Progressive Intelligence Analysis Levels
+## 🎯 Analysis Levels
 
-### 🔴 Critical Level
+### 🔴 Critical Level (Default)
 Only shows critical and high-severity violations that need immediate attention:
-- Missing error handling in TCA Action enums
-- Monolithic State structs (>15 properties)
 - Perfect for quick code reviews and CI checks
+- Fastest execution time
 
 ### 🟠 Standard Level
 Shows all violations with complete architectural analysis:
-- All critical and high violations
-- Medium and low severity issues
 - Recommended for regular development workflows
+- Medium severity issues included
 
 ### 🟡 Comprehensive Level
-Standard analysis plus advanced pattern insights:
-- Architectural hotspots (files with 5+ violations)
+Standard analysis plus architectural insights:
 - Cross-domain pattern analysis
+- Architectural hotspots identification
 - Strategic refactoring recommendations
-- Ideal for architectural reviews and planning
-
-## 🏗️ Built-in Rules
-
-### TCA-Focused Rules
-
-#### TCA Missing Error Handling (Critical)
-Detects Action enums without error handling cases:
-
-```swift
-enum FeatureAction {
-    case load
-    case loaded(UserData)
-    case save(UserData)
-    // Missing: case error(Error)
-    // Missing: case loadFailed(Error)
-}
-```
-
-#### Monolithic Features (High)
-Identifies State structs with excessive complexity:
-
-```swift
-@Reducer
-struct Feature {
-    struct State: Equatable {
-        var user: UserState
-        var navigation: NavigationState
-        var search: SearchState
-        var filter: FilterState
-        var settings: SettingsState
-        var loading: LoadingState
-        var error: ErrorState
-        var analytics: AnalyticsState
-        var cache: CacheState
-        var sync: SyncState
-        // ... 21 total properties (>15 threshold)
-    }
-}
-```
-
-#### High Coupling (Medium)
-Detects files with too many dependencies:
-
-```swift
-import Foundation
-import SwiftUI
-import Combine
-import Networking
-import Database
-import Auth
-import Analytics
-import Cache
-import Settings
-import Storage
-import Utilities
-import Helpers
-import Logging
-import Monitoring
-// ... 18 total imports (>15 threshold)
-```
-
-#### Architectural Hotspots (Comprehensive)
-Identifies files with multiple violations needing comprehensive refactoring.
 
 ## 🔧 Integration Examples
-
-### Claude Agent Integration
-```python
-import subprocess
-import json
-
-def analyze_swift_project(project_path, level="critical"):
-    """Analyze Swift project with smith-validation"""
-    result = subprocess.run([
-        "smith-validation", project_path, f"--level={level}"
-    ], capture_output=True, text=True)
-
-    if result.returncode == 0:
-        analysis = json.loads(result.stdout)
-        return {
-            "violations": analysis["findings"],
-            "health_score": analysis["summary"]["healthScore"],
-            "recommendations": analysis["recommendations"]
-        }
-    else:
-        return {"error": result.stderr}
-
-# Usage
-result = analyze_swift_project("./MyApp", level="comprehensive")
-print(f"Health Score: {result['health_score']}%")
-```
 
 ### CI/CD Integration
 
 #### GitHub Actions
 ```yaml
-name: Progressive Intelligence Analysis
+name: Smith Validation
 on: [push, pull_request]
 
 jobs:
@@ -253,31 +151,26 @@ jobs:
         run: brew tap Smith-Tools/smith && brew install smith-validation
       - name: Critical Analysis
         run: |
-          smith-validation . --level=critical > critical-analysis.json
-          echo "## Critical Violations" >> $GITHUB_STEP_SUMMARY
-          cat critical-analysis.json >> $GITHUB_STEP_SUMMARY
-      - name: Comprehensive Analysis
-        run: |
-          smith-validation . --level=comprehensive > comprehensive-analysis.json
+          smith-validation . --level=critical > smith-results.json
+          echo "## Smith Validation Results" >> $GITHUB_STEP_SUMMARY
+          cat smith-results.json >> $GITHUB_STEP_SUMMARY
 ```
 
 #### Makefile Integration
 ```makefile
-.PHONY: analyze-critical analyze-standard analyze-comprehensive
+.PHONY: smith-critical smith-standard smith-comprehensive
 
-analyze-critical:
+smith-critical:
 	smith-validation . --level=critical | jq .
 
-analyze-standard:
+smith-standard:
 	smith-validation . --level=standard | jq .
 
-analyze-comprehensive:
+smith-comprehensive:
 	smith-validation . --level=comprehensive | jq .
 ```
 
-## 📈 Performance & Scalability
-
-smith-validation is optimized for projects of all sizes:
+## 📈 Performance
 
 | Analysis Level | Small (<50 files) | Medium (50-200 files) | Large (200+ files) |
 |---------------|------------------|---------------------|-------------------|
@@ -285,7 +178,18 @@ smith-validation is optimized for projects of all sizes:
 | Standard       | <2 seconds        | <8 seconds          | <25 seconds       |
 | Comprehensive  | <3 seconds        | <15 seconds         | <45 seconds       |
 
-Memory usage scales linearly with project size and analysis depth.
+## 🏗️ Architecture
+
+### Current Implementation
+- **CLI Tool**: External analysis with no project dependencies
+- **Regex-based**: Fast pattern matching for common violations
+- **JSON Output**: Machine-readable results for automation
+- **Three-tier Analysis**: Critical/Standard/Comprehensive intelligence levels
+
+### Dependencies
+- **Swift 5.9+**: Foundation + Regex only
+- **SwiftSyntax**: Via swift-testing transitive dependency
+- **Swift Testing**: Advanced testing framework (unused in current CLI)
 
 ## 🧪 Development
 
@@ -301,14 +205,6 @@ swift build -c release
 swift test
 ```
 
-### Testing Progressive Intelligence
-```bash
-# Test different analysis levels
-./.build/release/smith-validation /path/to/test/project --level=critical
-./.build/release/smith-validation /path/to/test/project --level=standard
-./.build/release/smith-validation /path/to/test/project --level=comprehensive
-```
-
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
@@ -316,13 +212,12 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## 🔗 Links
 
 - [GitHub Repository](https://github.com/Smith-Tools/smith-validation)
-- [v2.0.0 Release](https://github.com/Smith-Tools/smith-validation/releases/tag/v2.0.0)
 - [Issues and Support](https://github.com/Smith-Tools/smith-validation/issues)
 - [Smith Tools Organization](https://github.com/Smith-Tools)
 - [Homebrew Tap](https://github.com/Smith-Tools/homebrew-smith)
 
 ---
 
-**smith-validation v2.0.0** - Progressive Intelligence architectural analysis for Swift, built with ❤️ by the Smith Tools team
+**smith-validation v2.0.0** - Fast CLI architectural analysis for Swift, built with ❤️ by the Smith Tools team
 
-🚀 **Perfect for**: AI agents, automated code review, architectural debt analysis, and progressive development workflows
+🚀 **Perfect for**: CI/CD pipelines, automated code review, architectural debt analysis
