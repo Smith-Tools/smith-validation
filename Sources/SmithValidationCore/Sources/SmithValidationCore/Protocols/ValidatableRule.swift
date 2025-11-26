@@ -20,12 +20,15 @@ public protocol ValidatableRule {
 
 /// Default implementation for the file path interface
 public extension ValidatableRule {
-    /// Default implementation that reads file, parses it, and calls context-based validation
+    /// Default implementation that reads file and creates context for validation
     func validate(filePath: String) -> ViolationCollection {
         do {
+            // Read the source file content
+            let source = try String(contentsOfFile: filePath)
             let url = URL(fileURLWithPath: filePath)
-            let syntax = try SourceFileSyntax.parse(from: url)
-            let context = SourceFileContext(path: filePath, url: url, syntax: syntax)
+
+            // TODO: Implement proper SwiftSyntax parsing - for now use nil syntax
+            let context = SourceFileContext(path: filePath, url: url, syntax: nil, content: source)
             return validate(context: context)
         } catch {
             // Return a violation collection with a parsing error

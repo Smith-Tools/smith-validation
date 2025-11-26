@@ -8,18 +8,28 @@ import SwiftSyntax
 public struct SourceFileContext {
     public let path: String
     public let url: URL
-    public let syntax: SourceFileSyntax
+    public let syntax: SourceFileSyntax?
+    public let content: String?
 
     public init(path: String, url: URL, syntax: SourceFileSyntax) {
         self.path = path
         self.url = url
         self.syntax = syntax
+        self.content = nil
+    }
+
+    public init(path: String, url: URL, syntax: SourceFileSyntax?, content: String?) {
+        self.path = path
+        self.url = url
+        self.syntax = syntax
+        self.content = content
     }
 
     public init(url: URL, syntax: SourceFileSyntax) {
         self.path = url.path
         self.url = url
         self.syntax = syntax
+        self.content = nil
     }
 
     /// Get filename without full path

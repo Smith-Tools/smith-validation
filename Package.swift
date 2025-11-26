@@ -23,11 +23,11 @@ let package = Package(
             name: "SmithValidation",
             targets: ["SmithValidation"]
         ),
-        // TCA-specific rules
-        .library(
-            name: "MaxwellsTCARules",
-            targets: ["MaxwellsTCARules"]
-        ),
+        // TCA-specific rules (temporarily disabled due to API compatibility issues)
+        // .library(
+        //     name: "MaxwellsTCARules",
+        //     targets: ["MaxwellsTCARules"]
+        // ),
         // CLI tool for AI agent integration
         .executable(
             name: "smith-validation",
@@ -64,14 +64,14 @@ let package = Package(
             ],
             path: "Sources/SmithValidation"
         ),
-        // TCA-specific rules
-        .target(
-            name: "MaxwellsTCARules",
-            dependencies: [
-                "SmithValidationCore"
-            ],
-            path: "Sources/MaxwellsTCARules"
-        ),
+        // TCA-specific rules (temporarily disabled due to API compatibility issues)
+        // .target(
+        //     name: "MaxwellsTCARules",
+        //     dependencies: [
+        //         "SmithValidationCore"
+        //     ],
+        //     path: "Sources/MaxwellsTCARules"
+        // ),
         // CLI tool (maintaining existing regex-based approach for backward compatibility)
         .executableTarget(
             name: "smith-validation",

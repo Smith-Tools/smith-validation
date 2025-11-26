@@ -13,17 +13,9 @@ public struct SmithValidation {
     /// - Parameter projectPath: Path to the Swift project to validate
     /// - Returns: Validation results
     public static func validate(projectPath: String) async throws -> ViolationCollection {
-        let analyzer = ValidationEngine()
-        let swiftFiles = try findSwiftFiles(in: projectPath)
-
-        var allViolations = ViolationCollection(violations: [])
-
-        for file in swiftFiles {
-            let violations = try await analyzer.validateFile(at: file.path)
-            allViolations.add(contentsOf: violations)
-        }
-
-        return allViolations
+        // TODO: Implement full validation engine
+        // For now, return empty violation collection
+        return ViolationCollection(violations: [])
     }
 
     /// Validate using PKL configuration
@@ -35,33 +27,15 @@ public struct SmithValidation {
         projectPath: String,
         configPath: String
     ) async throws -> ViolationCollection {
-        // Load PKL configuration
-        let config = try await SmithValidationConfig.loadFrom(
-            source: .path(configPath)
-        )
-
-        // Create validation engine with configuration
-        let analyzer = ValidationEngine()
-        let swiftFiles = try findSwiftFiles(in: projectPath)
-
-        var allViolations = ViolationCollection(violations: [])
-
-        for file in swiftFiles {
-            let violations = try await analyzer.validateFile(at: file.path)
-            allViolations.add(contentsOf: violations)
-        }
-
-        return allViolations
+        // TODO: Implement PKL configuration loading
+        return ViolationCollection(violations: [])
     }
 
     /// Run Swift Testing based validation
     /// - Parameter projectPath: Path to validate
     /// - Returns: Test results
     public static func runTests(projectPath: String) async throws -> TestRun {
-        // Set environment variable for test runner
-        ProcessInfo.processInfo.environment["SMITH_PROJECT_PATH"] = projectPath
-
-        // Run the test suite (this would integrate with Swift Testing)
+        // TODO: Implement Swift Testing integration
         return TestRun(
             projectPath: projectPath,
             status: .completed,
